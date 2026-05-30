@@ -98,8 +98,8 @@ class CountdownWidgetProvider4x2 : AppWidgetProvider() {
                 applyBaseStyle(views, event)
             }
 
-            val target = LocalDateTime.parse(event.targetDateTime)
             val now = LocalDateTime.now()
+            val target = event.calculateTarget(now)
 
             val days = ChronoUnit.DAYS.between(now, target)
             val hours = ChronoUnit.HOURS.between(now.plusDays(days), target)
@@ -174,7 +174,7 @@ class CountdownWidgetProvider4x2 : AppWidgetProvider() {
         views.setInt(R.id.widget_edit_btn, "setColorFilter", android.graphics.Color.WHITE)
     }
 
-    private fun decodeSampledBitmapFromUri(context: Context, uri: Uri, reqWidth: Int, reqHeight: Int): Bitmap? {
+    private fun decodeSampledBitmapFromUri(context: Context, uri: Uri, reqWidth: Int = 800, reqHeight: Int = 400): Bitmap? {
         return try {
             // First decode with inJustDecodeBounds=true to check dimensions
             val options = BitmapFactory.Options().apply {

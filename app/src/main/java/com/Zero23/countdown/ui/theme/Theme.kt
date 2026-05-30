@@ -1,6 +1,5 @@
 package com.Zero23.countdown.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -45,9 +44,29 @@ fun CountDownTheme(
     val colorScheme = when {
         customColor != null -> {
             if (darkTheme) {
-                darkColorScheme(primary = customColor, secondary = customColor, tertiary = customColor)
+                darkColorScheme(
+                    primary = customColor,
+                    secondary = customColor,
+                    tertiary = customColor,
+                    primaryContainer = customColor.copy(alpha = 0.3f),
+                    onPrimaryContainer = Color.White,
+                    surface = Color(0xFF1C1B1F),
+                    onSurface = Color.White,
+                    background = Color(0xFF1C1B1F),
+                    onBackground = Color.White
+                )
             } else {
-                lightColorScheme(primary = customColor, secondary = customColor, tertiary = customColor)
+                lightColorScheme(
+                    primary = customColor,
+                    secondary = customColor,
+                    tertiary = customColor,
+                    primaryContainer = customColor.copy(alpha = 0.15f),
+                    onPrimaryContainer = Color.Black,
+                    surface = Color(0xFFFDFDFD),
+                    onSurface = Color.Black,
+                    background = Color(0xFFFDFDFD),
+                    onBackground = Color.Black
+                )
             }
         }
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {

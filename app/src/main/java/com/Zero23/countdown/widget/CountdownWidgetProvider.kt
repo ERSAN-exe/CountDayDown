@@ -93,8 +93,8 @@ class CountdownWidgetProvider : AppWidgetProvider() {
                 applyBaseStyle(views, event)
             }
 
-            val target = LocalDateTime.parse(event.targetDateTime)
             val now = LocalDateTime.now()
+            val target = event.calculateTarget(now)
 
             val days = ChronoUnit.DAYS.between(now, target)
             val hours = ChronoUnit.HOURS.between(now.plusDays(days), target)
@@ -171,13 +171,13 @@ class CountdownWidgetProvider : AppWidgetProvider() {
         val colorHex = event.colorHex ?: "#FF4500" // Default color
         views.setInt(R.id.widget_layout_root, "setBackgroundColor", colorHex.toColorInt())
         views.setTextColor(R.id.widget_title, android.graphics.Color.WHITE)
-        views.setTextColor(R.id.widget_days, android.graphics.Color.parseColor("#99000000"))
-        views.setTextColor(R.id.widget_days_unit, android.graphics.Color.parseColor("#99000000"))
-        views.setTextColor(R.id.widget_time, android.graphics.Color.parseColor("#99000000"))
+        views.setTextColor(R.id.widget_days, "#99000000".toColorInt())
+        views.setTextColor(R.id.widget_days_unit, "#99000000".toColorInt())
+        views.setTextColor(R.id.widget_time, "#99000000".toColorInt())
         views.setInt(R.id.widget_edit_btn, "setColorFilter", android.graphics.Color.WHITE)
     }
 
-    private fun decodeSampledBitmapFromUri(context: Context, uri: Uri, reqWidth: Int, reqHeight: Int): Bitmap? {
+    private fun decodeSampledBitmapFromUri(context: Context, uri: Uri, reqWidth: Int = 400, reqHeight: Int = 400): Bitmap? {
         return try {
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }

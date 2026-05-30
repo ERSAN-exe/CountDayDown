@@ -2,12 +2,12 @@
     <string name="app_name">倒数倒数日</string>
     <string name="settings">设置</string>
     <string name="appearance">外观</string>
-    <string name="page_appearance">页面外观</string>
+    <string name="page_appearance">主题</string>
     <string name="theme_follow_system">跟随系统</string>
     <string name="theme_light">亮色</string>
     <string name="theme_dark">暗色</string>
     <string name="notifications">通知</string>
-    <string name="global_notification_switch">全局通知开关</string>
+    <string name="global_notification_switch">允许通知</string>
     <string name="notification_switch_desc">禁用后将不会收到任何提醒</string>
     <string name="language">语言</string>
     <string name="lang_follow_system">跟随系统</string>
@@ -52,7 +52,7 @@
     <string name="remaining">还剩</string>
     <string name="changelog">更新日志</string>
     <string name="changelog_full_title">更新日志 (仅中文)</string>
-    <string name="syncing">同步时间中...</string>
+    <string name="syncing">同步时间中&#8230;</string>
     <string name="current_time">当前: </string>
     <string name="target">目标: </string>
     <string name="reminder_enabled">提醒已开启</string>
@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB 调色</string>
     <string name="hex_edit">HEX 调色</string>
     <string name="past">已过去</string>
-    <string name="version_text">版本 v0.5</string>
+    <string name="version_text">版本v1.0</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>
@@ -76,7 +76,7 @@
     <string name="sort">排序</string>
     <string name="back">返回</string>
     <string name="app_desc">一个轻量化的简单倒数日应用</string>
-    <string name="made_by">铃一贰叁 制作</string>
+    <string name="made_by">铃一贰叁制作</string>
     <string name="notif_disabled_msg">已禁用通知</string>
     <string name="notif_permission_msg">请在设置中开启通知权限</string>
     <string name="go_to_settings">去开启</string>
@@ -97,7 +97,7 @@
     <string name="sort_by_creation">按创建日期排序</string>
     <string name="timezone">时区</string>
     <string name="network_time">网络时间</string>
-    <string name="app_theme_color">更改应用主题色</string>
+    <string name="app_theme_color">主题色</string>
     <string name="choose_theme_color">选择颜色</string>
     <string name="clover_pre">More More Jump!</string>
     <string name="widget_no_activity">当前没有活动</string>
@@ -111,4 +111,7 @@
     <string name="export_success">导出成功</string>
     <string name="import_success">导入成功</string>
     <string name="notif_format">“%1$s”%2$s</string>
+    <string name="about">关于</string>
+    <string name="feedback_email">反馈邮箱</string>
+    <string name="crop_title">裁剪照片</string>
 </resources>

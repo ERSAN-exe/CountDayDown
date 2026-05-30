@@ -52,7 +52,7 @@
     <string name="remaining">残り</string>
     <string name="changelog">更新履歴</string>
     <string name="changelog_full_title">更新履歴 (中国語のみ)</string>
-    <string name="syncing">同期中...</string>
+    <string name="syncing">同期中&#8230;</string>
     <string name="current_time">現在: </string>
     <string name="target">ターゲット: </string>
     <string name="reminder_enabled">リマインダー有効</string>
@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v0.5</string>
+    <string name="version_text">バージョン v1.0</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
     <string name="event_name">イベント名</string>
@@ -76,7 +76,7 @@
     <string name="sort">ソート</string>
     <string name="back">戻る</string>
     <string name="app_desc">シンプルで軽量なカウントダウンアプリ</string>
-    <string name="made_by">铃一贰叁 制作</string>
+    <string name="made_by">铃一贰叁制作</string>
     <string name="notif_disabled_msg">通知が無効です</string>
     <string name="notif_permission_msg">設定で通知権限を有効にしてください</string>
     <string name="go_to_settings">設定へ</string>
@@ -111,4 +111,7 @@
     <string name="export_success">エクスポートに成功しました</string>
     <string name="import_success">インポートに成功しました</string>
     <string name="notif_format">「%1$s」%2$s</string>
+    <string name="about">詳細</string>
+    <string name="feedback_email">フィードバックメール</string>
+    <string name="crop_title">写真を切り取る</string>
 </resources>
