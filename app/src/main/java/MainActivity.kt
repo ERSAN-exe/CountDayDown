@@ -2385,6 +2385,7 @@ fun SmallCountdownItem(
     val days = absDuration.toDays()
     val hours = absDuration.toHours() % 24
     val minutes = absDuration.toMinutes() % 60
+    val seconds = absDuration.seconds % 60
 
     val customColor = event.colorHex?.let { try { Color(it.toColorInt()) } catch(_:Exception) { null } }
     val isFuture = !isPast
@@ -2458,54 +2459,88 @@ fun SmallCountdownItem(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                if (isPast) {
-                    val (value, unit) = when {
-                        kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
-                        kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
-                        else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
-                    }
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            text = value,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Black,
-                            color = numberColor,
-                            lineHeight = 32.sp
-                        )
-                        Text(
-                            text = unit + stringResource(R.string.ago_suffix),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = numberColor,
-                            modifier = Modifier.padding(bottom = 4.dp, start = 2.dp)
-                        )
-                    }
-                } else {
-                    if (days > 0) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(
-                                text = days.toString(),
-                                fontSize = 36.sp,
-                                fontWeight = FontWeight.Black,
-                                color = numberColor,
-                                lineHeight = 36.sp
-                            )
-                            Text(
-                                text = stringResource(R.string.unit_days),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = numberColor,
-                                modifier = Modifier.padding(bottom = 4.dp, start = 2.dp)
-                            )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                        if (isPast) {
+                            val (value, unit) = when {
+                                kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
+                                kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
+                                else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
+                            }
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text(
+                                    text = value,
+                                    fontSize = 32.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = numberColor,
+                                    lineHeight = 32.sp
+                                )
+                                Text(
+                                    text = unit + stringResource(R.string.ago_suffix),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = numberColor,
+                                    modifier = Modifier.padding(bottom = 4.dp, start = 2.dp)
+                                )
+                            }
+                        } else {
+                            if (days > 0) {
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text(
+                                        text = days.toString(),
+                                        fontSize = 36.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = numberColor,
+                                        lineHeight = 36.sp
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.unit_days),
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = numberColor,
+                                        modifier = Modifier.padding(bottom = 4.dp, start = 2.dp)
+                                    )
+                                }
+                            } else {
+                                val timeText = when {
+                                    hours > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", hours, minutes)
+                                    minutes > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", minutes, seconds)
+                                    else -> String.format(LocalConfiguration.current.locales[0], "%02d", seconds)
+                                }
+                                Text(
+                                    text = timeText,
+                                    fontSize = 36.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = numberColor,
+                                    lineHeight = 36.sp
+                                )
+                            }
                         }
-                    } else {
-                        Text(
-                            text = String.format(LocalConfiguration.current.locales[0], "%02d:%02d", hours, minutes),
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.Black,
-                            color = numberColor,
-                            lineHeight = 36.sp
-                        )
+                    }
+
+                    if (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none")) {
+                        Row(
+                            modifier = Modifier.align(Alignment.BottomEnd),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (event.reminderMinutesBefore != null) {
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
+                                    contentDescription = null,
+                                    tint = titleColor.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            if (event.repeatType != null && event.repeatType != "none") {
+                                Icon(
+                                    imageVector = Icons.Default.Repeat,
+                                    contentDescription = null,
+                                    tint = titleColor.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

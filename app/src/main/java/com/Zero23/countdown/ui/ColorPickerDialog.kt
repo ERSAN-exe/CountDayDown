@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
 import com.Zero23.countdown.R
 
 @Composable
@@ -30,11 +31,11 @@ fun ColorPickerDialog(
     val defaultColor = String.format("#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb()))
     val startColor = initialColorHex ?: defaultColor
     var hexInput by remember { mutableStateOf(startColor.replace("#", "")) }
-    var rInput by remember { mutableStateOf((android.graphics.Color.parseColor(if (startColor.startsWith("#")) startColor else "#$startColor") shr 16 and 0xFF).toString()) }
-    var gInput by remember { mutableStateOf((android.graphics.Color.parseColor(if (startColor.startsWith("#")) startColor else "#$startColor") shr 8 and 0xFF).toString()) }
-    var bInput by remember { mutableStateOf((android.graphics.Color.parseColor(if (startColor.startsWith("#")) startColor else "#$startColor") and 0xFF).toString()) }
+    var rInput by remember { mutableStateOf(((if (startColor.startsWith("#")) startColor else "#$startColor").toColorInt() shr 16 and 0xFF).toString()) }
+    var gInput by remember { mutableStateOf(((if (startColor.startsWith("#")) startColor else "#$startColor").toColorInt() shr 8 and 0xFF).toString()) }
+    var bInput by remember { mutableStateOf(((if (startColor.startsWith("#")) startColor else "#$startColor").toColorInt() and 0xFF).toString()) }
 
-    val presets = listOf("#2196F3", "#F44336", "#4CAF50", "#FFEB3B", "#9C27B0", "#FF9800", "#795548", "#607D8B", "#000000")
+    val presets = listOf("#2196F3", "#F44336", "#4CAF50", "#FFEB3B", "#9C27B0", "#FF9800", "#795548", "#607D8B", "#000000", "#FFFFFF")
 
     fun updateFromRgb() {
         try {
@@ -43,18 +44,18 @@ fun ColorPickerDialog(
             val b = bInput.toInt().coerceIn(0, 255)
             val hex = String.format("%02X%02X%02X", r, g, b)
             hexInput = hex
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
     }
 
     fun updateFromHex() {
         try {
             if (hexInput.length == 6) {
-                val color = android.graphics.Color.parseColor("#$hexInput")
+                val color = "#$hexInput".toColorInt()
                 rInput = (color shr 16 and 0xFF).toString()
                 gInput = (color shr 8 and 0xFF).toString()
                 bInput = (color and 0xFF).toString()
             }
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
     }
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
@@ -64,14 +65,14 @@ fun ColorPickerDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Box(modifier = Modifier.fillMaxWidth().height(60.dp).clip(RoundedCornerShape(8.dp)).background(
-                    try { Color(android.graphics.Color.parseColor("#$hexInput")) } catch(e:Exception) { Color.Gray }
+                    try { Color("#$hexInput".toColorInt()) } catch(_: Exception) { Color.Gray }
                 ))
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(stringResource(R.string.preset_color), style = MaterialTheme.typography.labelLarge)
                 LazyVerticalGrid(columns = GridCells.Fixed(5), modifier = Modifier.height(95.dp)) {
                     items(presets) { color ->
-                        Box(modifier = Modifier.padding(4.dp).size(36.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(color))).clickable {
+                        Box(modifier = Modifier.padding(4.dp).size(36.dp).clip(CircleShape).background(Color(color.toColorInt())).clickable {
                             hexInput = color.replace("#", "")
                             updateFromHex()
                         })
@@ -83,7 +84,7 @@ fun ColorPickerDialog(
                 val specialPresets = listOf("#88dd44", "#ffccaa", "#99ccff", "#ffaacc", "#99eedd")
                 LazyVerticalGrid(columns = GridCells.Fixed(5), modifier = Modifier.height(50.dp)) {
                     items(specialPresets) { color ->
-                        Box(modifier = Modifier.padding(4.dp).size(36.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(color))).clickable {
+                        Box(modifier = Modifier.padding(4.dp).size(36.dp).clip(CircleShape).background(Color(color.toColorInt())).clickable {
                             hexInput = color.replace("#", "")
                             updateFromHex()
                         })
