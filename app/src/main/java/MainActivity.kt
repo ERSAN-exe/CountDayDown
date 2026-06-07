@@ -70,6 +70,13 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.palette.graphics.Palette
@@ -186,7 +193,34 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     
-                    NavHost(navController = navController, startDestination = "home") {
+                    NavHost(
+                        navController = navController,
+                        startDestination = "home",
+                        enterTransition = {
+                            slideIntoContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(450)
+                            ) + fadeIn(animationSpec = tween(450))
+                        },
+                        exitTransition = {
+                            slideOutOfContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(450)
+                            ) + fadeOut(animationSpec = tween(450))
+                        },
+                        popEnterTransition = {
+                            slideIntoContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(450)
+                            ) + fadeIn(animationSpec = tween(450))
+                        },
+                        popExitTransition = {
+                            slideOutOfContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(450)
+                            ) + fadeOut(animationSpec = tween(450))
+                        }
+                    ) {
                         composable("home") {
                             CountdownApp(navController, dataManager)
                         }
@@ -555,7 +589,11 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                         }
                     }
                     IconButton(
-                        onClick = { navController.navigate("settings") },
+                        onClick = {
+                            if (navController.currentDestination?.route == "home") {
+                                navController.navigate("settings")
+                            }
+                        },
                         modifier = Modifier
                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
                             .size(48.dp)
@@ -715,36 +753,44 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                     Text(stringResource(R.string.add_new_event), color = MaterialTheme.colorScheme.outline)
                 }
             } else {
-                if (isGridView) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        items(items = events, key = { it.id }) { event ->
-                            SmallCountdownItem(
-                                event = event,
-                                now = currentTick,
-                                onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
-                                onDelete = { eventToDelete = event }
-                            )
+                AnimatedContent(
+                    targetState = isGridView,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                    },
+                    label = "listGridAnimation"
+                ) { targetIsGridView ->
+                    if (targetIsGridView) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(16.dp)
+                        ) {
+                            items(items = events, key = { it.id }) { event ->
+                                SmallCountdownItem(
+                                    event = event,
+                                    now = currentTick,
+                                    onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
+                                    onDelete = { eventToDelete = event }
+                                )
+                            }
                         }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        items(items = events, key = { it.id }) { event ->
-                            CountdownItem(
-                                event = event,
-                                now = currentTick,
-                                onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
-                                onDelete = { eventToDelete = event }
-                            )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(16.dp)
+                        ) {
+                            items(items = events, key = { it.id }) { event ->
+                                CountdownItem(
+                                    event = event,
+                                    now = currentTick,
+                                    onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
+                                    onDelete = { eventToDelete = event }
+                                )
+                            }
                         }
                     }
                 }
@@ -800,19 +846,12 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
 
     Scaffold(
         containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
-        topBar = { }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-        ) {
-            // ... (Custom Top Bar Area) ...
+        topBar = {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .statusBarsPadding(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -831,7 +870,11 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                 }
                 
                 IconButton(
-                    onClick = { navController.popBackStack() },
+                    onClick = {
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack()
+                        }
+                    },
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
                         .size(48.dp)
@@ -843,6 +886,14 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                     )
                 }
             }
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+        ) {
 
             // Setting card content wrapped with padding horizontal = 24.dp so they align beautifully
             Column(
@@ -1235,7 +1286,11 @@ fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
                 }
                 
                 IconButton(
-                    onClick = { navController.popBackStack() },
+                    onClick = {
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack()
+                        }
+                    },
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
                         .size(48.dp)
@@ -1431,7 +1486,9 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 if (globalNotificationsEnabled && hasNotificationPermission) {
                     NotificationHelper.scheduleNotification(context, newEvent)
                 }
-                navController.popBackStack()
+                if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                    navController.popBackStack()
+                }
             }
         }
     }
@@ -1462,7 +1519,11 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 }
                 
                 IconButton(
-                    onClick = { navController.popBackStack() },
+                    onClick = {
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack()
+                        }
+                    },
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
                         .size(48.dp)
@@ -1584,284 +1645,43 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
-            ) {
-                when (selectedTab) {
-                    0 -> {
-                        // Date Time & Name UI
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text(stringResource(R.string.event_name)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(24.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                disabledContainerColor = MaterialTheme.colorScheme.surface
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Surface(
-                                onClick = { showDatePicker = true },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(Icons.Default.DateRange, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(selectedDate.toString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                }
-                            }
-                            Surface(
-                                onClick = { showTimePicker = true },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(Icons.Default.AccessTime, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(selectedTime.toString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                }
-                            }
-                        }
-                    }
-                    1 -> {
-                        // Image & Color UI
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // Color Section Card
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                .clickable { showColorPicker = true }
-                                .padding(horizontal = 24.dp, vertical = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.card_color), 
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Text(
-                                    text = selectedColorHex ?: String.format(LocalConfiguration.current.locales[0], "#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(
-                                        selectedColorHex?.let { Color(it.toColorInt()) } ?: MaterialTheme.colorScheme.primary,
-                                        CircleShape
-                                    )
+                AnimatedContent(
+                    targetState = selectedTab,
+                    modifier = Modifier.fillMaxWidth().animateContentSize().graphicsLayer(clip = true),
+                    contentAlignment = Alignment.TopCenter,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            slideIntoContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            ) togetherWith slideOutOfContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        } else {
+                            slideIntoContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            ) togetherWith slideOutOfContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
                             )
                         }
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Background Image Section Card
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                .padding(horizontal = 24.dp, vertical = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.background_image), 
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (backgroundImageUri != null) {
-                                    Text(
-                                        stringResource(R.string.image_selected),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.clickable { imagePickerLauncher.launch(arrayOf("image/*")) }
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    IconButton(
-                                        onClick = { 
-                                            backgroundImageUri = null
-                                            widgetImageUri = null
-                                        },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                                    }
-                                } else {
-                                    IconButton(
-                                        onClick = { imagePickerLauncher.launch(arrayOf("image/*")) },
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AddPhotoAlternate, 
-                                            contentDescription = null, 
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        if (backgroundImageUri != null) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                    .padding(horizontal = 24.dp, vertical = 12.dp)
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.background_brightness), 
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Slider(
-                                    value = backgroundBrightness,
-                                    onValueChange = { backgroundBrightness = it },
-                                    valueRange = 0f..1f,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Custom Font Section Card
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                .padding(horizontal = 24.dp, vertical = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.custom_font), 
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                if (customFontPath != null) {
-                                    Text(
-                                        text = File(customFontPath!!).name,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) }
-                                ) {
-                                    Icon(Icons.Default.TextFields, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                                }
-                                if (customFontPath != null) {
-                                    IconButton(onClick = { customFontPath = null }) {
-                                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    2 -> {
-                        // Reminder & Repeat UI
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Reminder Section Header
-                        Text(
-                            text = stringResource(R.string.reminder_settings),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
-                        )
-                        
-                        val isNotificationPartEnabled = globalNotificationsEnabled && hasNotificationPermission
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                .padding(20.dp)
-                                .alpha(if (isNotificationPartEnabled) 1f else 0.5f)
-                        ) {
-                            if (!hasNotificationPermission) {
-                                Text(
-                                    text = stringResource(R.string.notif_permission_msg),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                                Text(
-                                    text = stringResource(R.string.go_to_settings),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(bottom = 16.dp).clickable {
-                                        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                        }
-                                        context.startActivity(intent)
-                                    }
-                                )
-                            } else if (!globalNotificationsEnabled) {
-                                Text(
-                                    text = stringResource(R.string.notif_disabled_msg),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(bottom = 16.dp)
-                                )
-                            }
-
-                            OutlinedTextField(
-                                value = notificationContent,
-                                onValueChange = { notificationContent = it },
-                                label = { Text(stringResource(R.string.reminder_content)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text(stringResource(R.string.placeholder_title)) },
-                                enabled = isNotificationPartEnabled,
-                                shape = RoundedCornerShape(24.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surface
-                                )
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            ExposedDropdownMenuBox(
-                                expanded = isReminderMenuExpanded && isNotificationPartEnabled,
-                                onExpandedChange = { if (isNotificationPartEnabled) isReminderMenuExpanded = it },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                    },
+                    label = "tabAnimation"
+                ) { targetTab ->
+                    when (targetTab) {
+                        0 -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                // Date Time & Name UI
+                                Spacer(modifier = Modifier.height(8.dp))
                                 OutlinedTextField(
-                                    value = reminderOptions.find { it.first == reminderMinutes }?.second ?: stringResource(R.string.no_reminder),
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isReminderMenuExpanded) },
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
-                                    enabled = isNotificationPartEnabled,
+                                    value = name,
+                                    onValueChange = { name = it },
+                                    label = { Text(stringResource(R.string.event_name)) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
                                     shape = RoundedCornerShape(24.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -1869,81 +1689,248 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                         disabledContainerColor = MaterialTheme.colorScheme.surface
                                     )
                                 )
-                                ExposedDropdownMenu(
-                                    expanded = isReminderMenuExpanded,
-                                    onDismissRequest = { isReminderMenuExpanded = false }
-                                ) {
-                                    reminderOptions.forEach { option ->
-                                        DropdownMenuItem(
-                                            text = { Text(option.second) },
-                                            onClick = {
-                                                reminderMinutes = option.first
-                                                isReminderMenuExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                        // Repeat Section Header
-                        Text(
-                            text = stringResource(R.string.repeat_settings),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
-                        )
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                .padding(20.dp)
-                        ) {
-                            ExposedDropdownMenuBox(
-                                expanded = isRepeatMenuExpanded,
-                                onExpandedChange = { isRepeatMenuExpanded = it },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                OutlinedTextField(
-                                    value = repeatOptions.find { it.first == repeatType }?.second ?: stringResource(R.string.repeat_none),
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatMenuExpanded) },
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
-                                    shape = RoundedCornerShape(24.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                        disabledContainerColor = MaterialTheme.colorScheme.surface
-                                    )
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = isRepeatMenuExpanded,
-                                    onDismissRequest = { isRepeatMenuExpanded = false }
-                                ) {
-                                    repeatOptions.forEach { option ->
-                                        DropdownMenuItem(
-                                            text = { Text(option.second) },
-                                            onClick = {
-                                                repeatType = option.first
-                                                isRepeatMenuExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (repeatType == "custom") {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedTextField(
-                                        value = repeatInterval,
-                                        onValueChange = { repeatInterval = it },
-                                        label = { Text(stringResource(R.string.repeat_every)) },
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Surface(
+                                        onClick = { showDatePicker = true },
                                         modifier = Modifier.weight(1f),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        shape = RoundedCornerShape(24.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Default.DateRange, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(selectedDate.toString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        }
+                                    }
+                                    Surface(
+                                        onClick = { showTimePicker = true },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(24.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Default.AccessTime, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(selectedTime.toString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        1 -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                // Image & Color UI
+                                Spacer(modifier = Modifier.height(8.dp))
+                                // Color Section Card
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                        .clickable { showColorPicker = true }
+                                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = stringResource(R.string.card_color),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        Text(
+                                            text = selectedColorHex ?: String.format(LocalConfiguration.current.locales[0], "#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .background(
+                                                selectedColorHex?.let { Color(it.toColorInt()) } ?: MaterialTheme.colorScheme.primary,
+                                                CircleShape
+                                            )
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // Background Image Section Card
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.background_image),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (backgroundImageUri != null) {
+                                            Text(
+                                                stringResource(R.string.image_selected),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.clickable { imagePickerLauncher.launch(arrayOf("image/*")) }
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            IconButton(
+                                                onClick = {
+                                                    backgroundImageUri = null
+                                                    widgetImageUri = null
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                            }
+                                        } else {
+                                            IconButton(
+                                                onClick = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                                                modifier = Modifier.size(40.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.AddPhotoAlternate,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (backgroundImageUri != null) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.background_brightness),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        Slider(
+                                            value = backgroundBrightness,
+                                            onValueChange = { backgroundBrightness = it },
+                                            valueRange = 0f..1f,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // Custom Font Section Card
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = stringResource(R.string.custom_font),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        if (customFontPath != null) {
+                                            Text(
+                                                text = File(customFontPath!!).name,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) }
+                                        ) {
+                                            Icon(Icons.Default.TextFields, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        }
+                                        if (customFontPath != null) {
+                                            IconButton(onClick = { customFontPath = null }) {
+                                                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        2 -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                // Reminder & Repeat UI
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Reminder Section Header
+                                Text(
+                                    text = stringResource(R.string.reminder_settings),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                                )
+
+                                val isNotificationPartEnabled = globalNotificationsEnabled && hasNotificationPermission
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                        .padding(20.dp)
+                                        .alpha(if (isNotificationPartEnabled) 1f else 0.5f)
+                                ) {
+                                    if (!hasNotificationPermission) {
+                                        Text(
+                                            text = stringResource(R.string.notif_permission_msg),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.go_to_settings),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(bottom = 16.dp).clickable {
+                                                val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                                }
+                                                context.startActivity(intent)
+                                            }
+                                        )
+                                    } else if (!globalNotificationsEnabled) {
+                                        Text(
+                                            text = stringResource(R.string.notif_disabled_msg),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.padding(bottom = 16.dp)
+                                        )
+                                    }
+
+                                    OutlinedTextField(
+                                        value = notificationContent,
+                                        onValueChange = { notificationContent = it },
+                                        label = { Text(stringResource(R.string.reminder_content)) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        placeholder = { Text(stringResource(R.string.placeholder_title)) },
+                                        enabled = isNotificationPartEnabled,
                                         shape = RoundedCornerShape(24.dp),
                                         colors = OutlinedTextFieldDefaults.colors(
                                             focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -1951,17 +1938,70 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                             disabledContainerColor = MaterialTheme.colorScheme.surface
                                         )
                                     )
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
                                     ExposedDropdownMenuBox(
-                                        expanded = isRepeatUnitMenuExpanded,
-                                        onExpandedChange = { isRepeatUnitMenuExpanded = it },
-                                        modifier = Modifier.weight(1f)
+                                        expanded = isReminderMenuExpanded && isNotificationPartEnabled,
+                                        onExpandedChange = { if (isNotificationPartEnabled) isReminderMenuExpanded = it },
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         OutlinedTextField(
-                                            value = repeatUnits.find { it.first == repeatUnit }?.second ?: stringResource(R.string.unit_days),
+                                            value = reminderOptions.find { it.first == reminderMinutes }?.second ?: stringResource(R.string.no_reminder),
                                             onValueChange = {},
                                             readOnly = true,
-                                            label = { Text(stringResource(R.string.repeat_unit)) },
-                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatUnitMenuExpanded) },
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isReminderMenuExpanded) },
+                                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                            enabled = isNotificationPartEnabled,
+                                            shape = RoundedCornerShape(24.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                disabledContainerColor = MaterialTheme.colorScheme.surface
+                                            )
+                                        )
+                                        ExposedDropdownMenu(
+                                            expanded = isReminderMenuExpanded,
+                                            onDismissRequest = { isReminderMenuExpanded = false }
+                                        ) {
+                                            reminderOptions.forEach { option ->
+                                                DropdownMenuItem(
+                                                    text = { Text(option.second) },
+                                                    onClick = {
+                                                        reminderMinutes = option.first
+                                                        isReminderMenuExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // Repeat Section Header
+                                Text(
+                                    text = stringResource(R.string.repeat_settings),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                                )
+
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                        .padding(20.dp)
+                                ) {
+                                    ExposedDropdownMenuBox(
+                                        expanded = isRepeatMenuExpanded,
+                                        onExpandedChange = { isRepeatMenuExpanded = it },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        OutlinedTextField(
+                                            value = repeatOptions.find { it.first == repeatType }?.second ?: stringResource(R.string.repeat_none),
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatMenuExpanded) },
                                             modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
                                             shape = RoundedCornerShape(24.dp),
                                             colors = OutlinedTextFieldDefaults.colors(
@@ -1971,17 +2011,70 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                             )
                                         )
                                         ExposedDropdownMenu(
-                                            expanded = isRepeatUnitMenuExpanded,
-                                            onDismissRequest = { isRepeatUnitMenuExpanded = false }
+                                            expanded = isRepeatMenuExpanded,
+                                            onDismissRequest = { isRepeatMenuExpanded = false }
                                         ) {
-                                            repeatUnits.forEach { unit ->
+                                            repeatOptions.forEach { option ->
                                                 DropdownMenuItem(
-                                                    text = { Text(unit.second) },
+                                                    text = { Text(option.second) },
                                                     onClick = {
-                                                        repeatUnit = unit.first
-                                                        isRepeatUnitMenuExpanded = false
+                                                        repeatType = option.first
+                                                        isRepeatMenuExpanded = false
                                                     }
                                                 )
+                                            }
+                                        }
+                                    }
+
+                                    if (repeatType == "custom") {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedTextField(
+                                                value = repeatInterval,
+                                                onValueChange = { repeatInterval = it },
+                                                label = { Text(stringResource(R.string.repeat_every)) },
+                                                modifier = Modifier.weight(1f),
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                shape = RoundedCornerShape(24.dp),
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                    disabledContainerColor = MaterialTheme.colorScheme.surface
+                                                )
+                                            )
+                                            ExposedDropdownMenuBox(
+                                                expanded = isRepeatUnitMenuExpanded,
+                                                onExpandedChange = { isRepeatUnitMenuExpanded = it },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = repeatUnits.find { it.first == repeatUnit }?.second ?: stringResource(R.string.unit_days),
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text(stringResource(R.string.repeat_unit)) },
+                                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatUnitMenuExpanded) },
+                                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                                    shape = RoundedCornerShape(24.dp),
+                                                    colors = OutlinedTextFieldDefaults.colors(
+                                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                        disabledContainerColor = MaterialTheme.colorScheme.surface
+                                                    )
+                                                )
+                                                ExposedDropdownMenu(
+                                                    expanded = isRepeatUnitMenuExpanded,
+                                                    onDismissRequest = { isRepeatUnitMenuExpanded = false }
+                                                ) {
+                                                    repeatUnits.forEach { unit ->
+                                                        DropdownMenuItem(
+                                                            text = { Text(unit.second) },
+                                                            onClick = {
+                                                                repeatUnit = unit.first
+                                                                isRepeatUnitMenuExpanded = false
+                                                            }
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }

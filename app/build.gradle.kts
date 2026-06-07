@@ -10,10 +10,10 @@ android {
 
     defaultConfig {
         applicationId = "com.Zero23.countdown"
-        minSdk = 26
+        minSdk = 31
         targetSdk = 37
         versionCode = 1
-        versionName = "1.1"
+        versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -23,7 +23,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }

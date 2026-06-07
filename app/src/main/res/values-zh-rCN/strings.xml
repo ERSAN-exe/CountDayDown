@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB 调色</string>
     <string name="hex_edit">HEX 调色</string>
     <string name="past">已过去</string>
-    <string name="version_text">版本v1.1</string>
+    <string name="version_text">版本v1.2</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>

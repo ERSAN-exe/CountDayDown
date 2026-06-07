@@ -43,6 +43,7 @@ fun ColorPickerDialog(
     var bInput by remember { mutableStateOf(((if (startColor.startsWith("#")) startColor else "#$startColor").toColorInt() and 0xFF).toString()) }
 
     val presets = listOf("#2196F3", "#F44336", "#4CAF50", "#FFEB3B", "#9C27B0", "#FF9800", "#795548", "#607D8B", "#000000", "#FFFFFF")
+    val specialPresets = listOf("#88dd44", "#ffccaa", "#99ccff", "#ffaacc", "#99eedd")
 
     fun updateFromRgb() {
         try {
@@ -86,11 +87,18 @@ fun ColorPickerDialog(
                     }
                 }
 
-                if (savedColors.isNotEmpty()) {
+                val filteredSavedColors = remember(savedColors, presets, specialPresets) {
+                    savedColors.filter { color ->
+                        presets.none { it.equals(color, ignoreCase = true) } &&
+                        specialPresets.none { it.equals(color, ignoreCase = true) }
+                    }
+                }
+                
+                if (filteredSavedColors.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(stringResource(R.string.saved_colors), style = MaterialTheme.typography.labelLarge)
                     LazyVerticalGrid(columns = GridCells.Fixed(5), modifier = Modifier.heightIn(max = 95.dp)) {
-                        items(savedColors) { color ->
+                        items(filteredSavedColors) { color ->
                             Box(modifier = Modifier
                                 .padding(4.dp)
                                 .size(36.dp)
@@ -112,7 +120,6 @@ fun ColorPickerDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.clover_pre), style = MaterialTheme.typography.labelLarge)
-                val specialPresets = listOf("#88dd44", "#ffccaa", "#99ccff", "#ffaacc", "#99eedd")
                 LazyVerticalGrid(columns = GridCells.Fixed(5), modifier = Modifier.height(50.dp)) {
                     items(specialPresets) { color ->
                         Box(modifier = Modifier.padding(4.dp).size(36.dp).clip(CircleShape).background(Color(color.toColorInt())).clickable {
@@ -179,7 +186,11 @@ fun ColorPickerDialog(
                     TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                     TextButton(onClick = {
                         val finalHex = "#$hexInput"
-                        onSaveColor(finalHex)
+                        val isPreset = presets.any { it.equals(finalHex, ignoreCase = true) } ||
+                                       specialPresets.any { it.equals(finalHex, ignoreCase = true) }
+                        if (!isPreset) {
+                            onSaveColor(finalHex)
+                        }
                         onColorSelected(finalHex)
                         onDismiss()
                     }) { Text(stringResource(R.string.confirm)) }

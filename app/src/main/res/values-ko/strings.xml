@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB 편집</string>
     <string name="hex_edit">HEX 편집</string>
     <string name="past">경과</string>
-    <string name="version_text">버전 v1.1</string>
+    <string name="version_text">버전 v1.2</string>
     <string name="create_card">새 카드 생성</string>
     <string name="edit_card">편집</string>
     <string name="event_name">이벤트 이름</string>
