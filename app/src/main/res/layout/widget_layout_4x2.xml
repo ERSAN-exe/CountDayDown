@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -8,6 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
+        android:contentDescription="@null"
         android:visibility="gone" />
 
     <ImageView
@@ -15,6 +17,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#000000"
+        android:contentDescription="@null"
         android:visibility="gone" />
 
     <LinearLayout
@@ -45,6 +48,13 @@
                     android:textSize="22sp"
                     android:textStyle="bold" />
 
+                <ImageView
+                    android:id="@+id/widget_title_img"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@null"
+                    android:visibility="gone" />
+
                 <TextView
                     android:id="@+id/widget_target_label"
                     android:layout_width="wrap_content"
@@ -52,6 +62,13 @@
                     android:text="@string/target_date_label"
                     android:textColor="#B3FFFFFF"
                     android:textSize="12sp" />
+
+                <ImageView
+                    android:id="@+id/widget_target_label_img"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@null"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <ImageView
@@ -60,12 +77,13 @@
                 android:layout_height="24dp"
                 android:layout_alignParentEnd="true"
                 android:alpha="0.6"
-                android:contentDescription="@android:string/copy"
+                android:contentDescription="@string/edit_card"
                 android:src="@drawable/ic_edit_pencil"
-                android:tint="#FFFFFF" />
+                app:tint="#FFFFFF" />
         </RelativeLayout>
 
         <LinearLayout
+            android:id="@+id/widget_spacer"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
@@ -82,11 +100,18 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:includeFontPadding="false"
-                android:text="389"
+                android:text="@string/remaining"
                 android:textColor="#FFFFFF"
                 android:textSize="42sp"
                 android:textStyle="bold"
                 android:maxLines="1" />
+
+            <ImageView
+                android:id="@+id/widget_days_img"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@null"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/widget_days_unit"
@@ -100,6 +125,15 @@
                 android:textStyle="bold"
                 android:alpha="0.9" />
 
+            <ImageView
+                android:id="@+id/widget_days_unit_img"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="2dp"
+                android:layout_marginBottom="6dp"
+                android:contentDescription="@null"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/widget_time"
                 android:layout_width="wrap_content"
@@ -112,6 +146,15 @@
                 android:textStyle="bold"
                 android:alpha="0.8"
                 android:maxLines="1" />
+
+            <ImageView
+                android:id="@+id/widget_time_img"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginBottom="8dp"
+                android:contentDescription="@null"
+                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

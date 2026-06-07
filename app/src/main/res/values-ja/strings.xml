@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.0</string>
+    <string name="version_text">バージョン v1.1</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
     <string name="event_name">イベント名</string>
@@ -108,10 +108,18 @@
     <string name="background_brightness">背景の明るさ</string>
     <string name="choose_event_title">カウントダウンカードを選択</string>
     <string name="target_date_label">目標日</string>
+    <string name="date_time">日付と時間</string>
+    <string name="image_color">画像と色</string>
+    <string name="reminder_repeat">リマインダーと繰り返し</string>
+    <string name="edit">編集</string>
     <string name="export_success">エクスポートに成功しました</string>
     <string name="import_success">インポートに成功しました</string>
     <string name="notif_format">「%1$s」%2$s</string>
     <string name="about">詳細</string>
     <string name="feedback_email">フィードバックメール</string>
     <string name="crop_title">写真を切り取る</string>
+    <string name="custom_font">カスタムフォント</string>
+    <string name="saved_colors">最近使用した色</string>
+    <string name="follow_bg">背景に合わせる</string>
+    <string name="mask_intensity">マスクの強度</string>
 </resources>

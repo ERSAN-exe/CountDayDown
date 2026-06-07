@@ -2,6 +2,7 @@ package com.Zero23.countdown
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 
+import android.content.Context
 import android.Manifest
 import android.content.Intent
 import android.graphics.Bitmap
@@ -20,7 +21,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -61,8 +61,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -71,6 +72,7 @@ import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import androidx.navigation.NavController
 import androidx.navigation.NavType
+import androidx.palette.graphics.Palette
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -112,9 +114,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val context = LocalContext.current
+            val scope = rememberCoroutineScope()
             val dataManager = remember { DataManager(context) }
             val themeMode by dataManager.themeMode.collectAsState(initial = 0)
             val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
+            
+            // Collect global background settings
+            val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
+            val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
+            
+            LaunchedEffect(appBgImage) {
+                if (appBgImage != null) {
+                    val color = extractColorFromUri(context, appBgImage!!.toUri())
+                    dataManager.setAppBackgroundThemeColor(color)
+                } else {
+                    dataManager.setAppBackgroundThemeColor(null)
+                }
+            }
             
             val isDarkTheme = when (themeMode) {
                 1 -> false
@@ -128,43 +144,84 @@ class MainActivity : ComponentActivity() {
 
             CountDownTheme(darkTheme = isDarkTheme, customColor = customThemeColor) {
                 val navController = rememberNavController()
+                val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+                val screenRatio = windowInfo.containerSize.height.toFloat() / windowInfo.containerSize.width.toFloat()
 
-                // Request notification permission on start
-                val launcher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.RequestPermission()
-                ) { }
+                // Global Crop State
+                var globalCropOriginalUri by remember { mutableStateOf<Uri?>(null) }
+                val bgPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                    if (uri != null) globalCropOriginalUri = uri
+                }
 
-                LaunchedEffect(Unit) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (appBgImage != null) {
+                        AsyncImage(
+                            model = appBgImage,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    if (isDarkTheme) Color.Black.copy(alpha = appBgBrightness)
+                                    else Color.White.copy(alpha = appBgBrightness)
+                                )
+                        )
+                    }
+
+                    // Request notification permission on start
+                    val launcher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestPermission()
+                    ) { }
+
+                    LaunchedEffect(Unit) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        
+                        if (intent?.action == "com.Zero23.countdown.ACTION_CREATE_EVENT") {
+                            navController.navigate("add_edit")
+                        }
                     }
                     
-                    if (intent?.action == "com.Zero23.countdown.ACTION_CREATE_EVENT") {
-                        navController.navigate("add_edit")
+                    NavHost(navController = navController, startDestination = "home") {
+                        composable("home") {
+                            CountdownApp(navController, dataManager)
+                        }
+                        composable("settings") {
+                            SettingsScreen(navController, dataManager, onPickBg = { bgPickerLauncher.launch(arrayOf("image/*")) })
+                        }
+                        composable("changelog") {
+                            ChangelogScreen(navController, dataManager)
+                        }
+                        composable(
+                            "add_edit?eventId={eventId}",
+                            arguments = listOf(navArgument("eventId") { 
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            })
+                        ) { backStackEntry ->
+                            val eventId = backStackEntry.arguments?.getString("eventId")
+                            AddEditScreen(navController, dataManager, eventId)
+                        }
                     }
                 }
-                
-                NavHost(navController = navController, startDestination = "home") {
-                    composable("home") {
-                        CountdownApp(navController, dataManager)
-                    }
-                    composable("settings") {
-                        SettingsScreen(navController, dataManager)
-                    }
-                    composable("changelog") {
-                        ChangelogScreen(navController)
-                    }
-                    composable(
-                        "add_edit?eventId={eventId}",
-                        arguments = listOf(navArgument("eventId") { 
-                            type = NavType.StringType
-                            nullable = true
-                            defaultValue = null
-                        })
-                    ) { backStackEntry ->
-                        val eventId = backStackEntry.arguments?.getString("eventId")
-                        AddEditScreen(navController, dataManager, eventId)
-                    }
+
+                if (globalCropOriginalUri != null) {
+                    ImageCropOverlay(
+                        originalUri = globalCropOriginalUri!!,
+                        initialRatio = screenRatio,
+                        showRatioToggle = false,
+                        onCropDone = { uri, _ ->
+                            scope.launch { dataManager.setAppBackgroundImage(uri) }
+                            globalCropOriginalUri = null
+                        },
+                        onDismiss = { globalCropOriginalUri = null },
+                        onReselect = { bgPickerLauncher.launch(arrayOf("image/*")) }
+                    )
                 }
             }
         }
@@ -198,6 +255,8 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
     val isGridView = isGridViewPref
     var currentTick by remember { mutableStateOf(LocalDateTime.now()) }
     
+    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
+
     val events = remember(rawEvents, sortAscending, sortByCreationDate, currentTick) {
         val sorted = if (sortByCreationDate) {
             rawEvents.sortedBy { it.createdAt }
@@ -220,6 +279,7 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                     val backup = dataManager.getAllData()
                     val resolver = context.contentResolver
                     val zipImages = mutableMapOf<String, String>()
+                    val zipFonts = mutableMapOf<String, String>()
                     
                     context.contentResolver.openOutputStream(it)?.use { os ->
                         ZipOutputStream(os).use { zos ->
@@ -250,13 +310,30 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                                         } catch (_: Exception) {}
                                     }
                                 }
+                                event.customFontPath?.let { path ->
+                                    if (!path.startsWith("fonts/")) {
+                                        val file = File(path)
+                                        if (file.exists()) {
+                                            val entryName = "fonts/${file.name}"
+                                            try {
+                                                file.inputStream().use { input ->
+                                                    zos.putNextEntry(ZipEntry(entryName))
+                                                    input.copyTo(zos)
+                                                    zos.closeEntry()
+                                                    zipFonts[path] = entryName
+                                                }
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
+                                }
                             }
                             
                             val backupForZip = backup.copy(
                                 events = backup.events.map { event ->
                                     event.copy(
                                         backgroundImageUri = zipImages["${event.id}_bg"] ?: event.backgroundImageUri,
-                                        widgetImageUri = zipImages["${event.id}_widget"] ?: event.widgetImageUri
+                                        widgetImageUri = zipImages["${event.id}_widget"] ?: event.widgetImageUri,
+                                        customFontPath = zipFonts[event.customFontPath] ?: event.customFontPath
                                     )
                                 }
                             )
@@ -286,12 +363,15 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                             var entry = zis.nextEntry
                             var backupJson: String? = null
                             val imageFiles = mutableMapOf<String, ByteArray>()
+                            val fontFiles = mutableMapOf<String, ByteArray>()
                             
                             while (entry != null) {
                                 if (entry.name == "backup.json") {
                                     backupJson = zis.readBytes().decodeToString()
                                 } else if (entry.name.startsWith("images/")) {
                                     imageFiles[entry.name] = zis.readBytes()
+                                } else if (entry.name.startsWith("fonts/")) {
+                                    fontFiles[entry.name] = zis.readBytes()
                                 }
                                 zis.closeEntry()
                                 entry = zis.nextEntry
@@ -300,10 +380,12 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                             if (backupJson != null) {
                                 val backup = Json.decodeFromString<BackupData>(backupJson)
                                 val imagesDir = File(context.filesDir, "imported_images").apply { mkdirs() }
+                                val fontsDir = File(context.filesDir, "imported_fonts").apply { mkdirs() }
                                 
                                 val restoredEvents = backup.events.map { event ->
                                     var bgUri = event.backgroundImageUri
                                     var widgetUri = event.widgetImageUri
+                                    var fontPath = event.customFontPath
                                     
                                     if (bgUri?.startsWith("images/") == true) {
                                         imageFiles[bgUri]?.let { data ->
@@ -319,7 +401,19 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                                             widgetUri = Uri.fromFile(file).toString()
                                         }
                                     }
-                                    event.copy(backgroundImageUri = bgUri, widgetImageUri = widgetUri)
+                                    if (fontPath?.startsWith("fonts/") == true) {
+                                        fontFiles[fontPath]?.let { data ->
+                                            val originalName = fontPath.substringAfterLast("/")
+                                            val file = File(fontsDir, originalName)
+                                            file.writeBytes(data)
+                                            fontPath = file.absolutePath
+                                        }
+                                    }
+                                    event.copy(
+                                        backgroundImageUri = bgUri, 
+                                        widgetImageUri = widgetUri,
+                                        customFontPath = fontPath
+                                    )
                                 }
                                 
                                 dataManager.restoreAllData(backup.copy(events = restoredEvents))
@@ -392,6 +486,7 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
     val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
 
     Scaffold(
+        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate("add_edit") },
@@ -689,16 +784,22 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavController, dataManager: DataManager) {
+fun SettingsScreen(navController: NavController, dataManager: DataManager, onPickBg: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themeMode by dataManager.themeMode.collectAsState(initial = 0)
     val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
+    val savedColors by dataManager.savedColors.collectAsState(initial = emptyList())
     val notificationsEnabled by dataManager.notificationsEnabled.collectAsState(initial = true)
+    
+    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
+    val appBgThemeColor by dataManager.appBackgroundThemeColor.collectAsState(initial = null)
+    val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
     
     var showThemeColorPicker by remember { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = { }
     ) { innerPadding ->
         Column(
@@ -707,7 +808,7 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager) {
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Custom Top Bar Area (using same horizontal = 16.dp and vertical = 8.dp as CountdownApp)
+            // ... (Custom Top Bar Area) ...
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -831,6 +932,49 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager) {
                             )
                     )
                 }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Global Background Image Card
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(stringResource(R.string.background_image), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (appBgImage != null) {
+                            IconButton(onClick = { scope.launch { dataManager.setAppBackgroundImage(null) } }) {
+                                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        IconButton(onClick = { onPickBg() }) {
+                            Icon(Icons.Default.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                }
+
+                if (appBgImage != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                            .padding(16.dp)
+                    ) {
+                        Text(stringResource(R.string.mask_intensity), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Slider(
+                            value = appBgBrightness,
+                            onValueChange = { scope.launch { dataManager.setAppBackgroundBrightness(it) } },
+                            valueRange = 0f..1f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
 
                 // Notifications Section
                 Text(
@@ -838,6 +982,7 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager) {
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
                 )
+
 
                 Row(
                     modifier = Modifier
@@ -847,22 +992,61 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    var hasNotifPermission by remember {
+                        mutableStateOf(
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                            } else true
+                        )
+                    }
+
+                    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                    DisposableEffect(lifecycleOwner) {
+                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                hasNotifPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                                } else true
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                    }
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.global_notification_switch), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         Text(
-                            text = stringResource(R.string.notification_switch_desc),
+                            text = if (!hasNotifPermission) stringResource(R.string.notif_permission_msg)
+                                   else if (!notificationsEnabled) stringResource(R.string.notif_disabled_msg)
+                                   else stringResource(R.string.notification_switch_desc),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            color = if (hasNotifPermission && notificationsEnabled) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.error
                         )
+                        if (!hasNotifPermission) {
+                            Text(
+                                text = stringResource(R.string.go_to_settings),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clickable {
+                                    val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                    context.startActivity(intent)
+                                }
+                            )
+                        }
                     }
                     Switch(
-                        checked = notificationsEnabled,
+                        checked = notificationsEnabled && hasNotifPermission,
                         onCheckedChange = { scope.launch { dataManager.setNotificationsEnabled(it) } },
+                        enabled = hasNotifPermission,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = MaterialTheme.colorScheme.primary,
                             uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            uncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            disabledUncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                            disabledUncheckedThumbColor = Color.Gray.copy(alpha = 0.5f)
                         )
                     )
                 }
@@ -968,19 +1152,48 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager) {
             ColorPickerDialog(
                 initialColorHex = themeColorHex,
                 showFollowSystem = true,
+                showFollowBackground = true,
+                isBackgroundSet = appBgImage != null,
+                savedColors = savedColors,
+                onDeleteSavedColor = { scope.launch { dataManager.removeSavedColor(it) } },
+                onSaveColor = { scope.launch { dataManager.addSavedColor(it) } },
                 onDismiss = { showThemeColorPicker = false },
                 onColorSelected = { 
-                    scope.launch { dataManager.setThemeColor(it) }
+                    if (it == "FOLLOW_BG") {
+                        scope.launch { dataManager.setThemeColor(appBgThemeColor) }
+                    } else {
+                        scope.launch { dataManager.setThemeColor(it) }
+                    }
                 }
             )
         }
     }
 }
 
+private suspend fun extractColorFromUri(context: Context, uri: Uri): String? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = false
+                inSampleSize = 4 // Scale down for speed
+            }
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val bitmap = BitmapFactory.decodeStream(input, null, options)
+                if (bitmap != null) {
+                    val palette = Palette.from(bitmap).generate()
+                    val dominantColor = palette.getDominantColor(android.graphics.Color.GRAY)
+                    String.format("#%06X", (0xFFFFFF and dominantColor))
+                } else null
+            }
+        } catch (_: Exception) { null }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChangelogScreen(navController: NavController) {
+fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
     val context = LocalContext.current
+    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
     val noChangelogMsg = stringResource(R.string.no_changelog)
     val changelogText = remember(noChangelogMsg) {
         try {
@@ -991,6 +1204,7 @@ fun ChangelogScreen(navController: NavController) {
     }
 
     Scaffold(
+        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {}
     ) { innerPadding ->
         Column(
@@ -1052,6 +1266,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val events by dataManager.events.collectAsState(initial = emptyList())
+    val savedColors by dataManager.savedColors.collectAsState(initial = emptyList())
     val globalNotificationsEnabled by dataManager.notificationsEnabled.collectAsState(initial = true)
     
     val initialEvent = remember(eventId, events) {
@@ -1117,6 +1332,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     var backgroundImageUri by remember(initialEvent) { mutableStateOf(initialEvent?.backgroundImageUri) }
     var widgetImageUri by remember(initialEvent) { mutableStateOf(initialEvent?.widgetImageUri) }
     var backgroundBrightness by remember(initialEvent) { mutableFloatStateOf(initialEvent?.backgroundBrightness ?: 0.5f) }
+    var customFontPath by remember(initialEvent) { mutableStateOf(initialEvent?.customFontPath) }
     
     var cropOriginalUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -1124,14 +1340,35 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
             uri?.let {
+                backgroundImageUri = null // Reset for 2-step crop
+                widgetImageUri = null
                 cropOriginalUri = it
             }
         }
     )
-    
-    var isReminderExpanded by remember { mutableStateOf(false) }
-    var isRepeatExpanded by remember { mutableStateOf(false) }
 
+    val fontPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            uri?.let {
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        context.contentResolver.openInputStream(it)?.use { input ->
+                            val fileName = "font_${UUID.randomUUID()}.ttf"
+                            val file = File(context.filesDir, fileName)
+                            file.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                            withContext(Dispatchers.Main) {
+                                customFontPath = file.absolutePath
+                            }
+                        }
+                    } catch (e: Exception) { e.printStackTrace() }
+                }
+            }
+        }
+    )
+    
     // Live preview tick
     var previewNow by remember { mutableStateOf(LocalDateTime.now().plusSeconds(globalTimeOffset)) }
     LaunchedEffect(Unit) {
@@ -1142,9 +1379,30 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     }
 
     // Notification permission check
-    val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    } else true
+    var hasNotificationPermission by remember { 
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            } else true
+        )
+    }
+
+    // Re-check permission when resuming or returning from settings
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                } else true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
 
     val onSave = {
         if (name.isNotBlank()) {
@@ -1161,6 +1419,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 backgroundImageUri = backgroundImageUri,
                 widgetImageUri = widgetImageUri,
                 backgroundBrightness = backgroundBrightness,
+                customFontPath = customFontPath,
                 createdAt = initialEvent?.createdAt ?: System.currentTimeMillis()
             )
             scope.launch {
@@ -1178,32 +1437,13 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     }
 
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onSave,
-                containerColor = if (name.isNotBlank()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check, 
-                    contentDescription = stringResource(R.string.save), 
-                    tint = if (name.isNotBlank()) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                )
-            }
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-        ) {
-            // Custom Top Bar Area
+        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
+        topBar = {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .statusBarsPadding(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1214,7 +1454,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (initialEvent == null) stringResource(R.string.create_card) else stringResource(R.string.edit_card),
+                        text = if (eventId == null) stringResource(R.string.create_card) else stringResource(R.string.edit_event),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontSize = 20.sp
@@ -1234,13 +1474,86 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     )
                 }
             }
-
-            Column(
+        },
+        bottomBar = {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .navigationBarsPadding(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Preview Card
+                // Custom Navigation Pill (Optimized for spacing and sliding effect)
+                Row(
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val navItems = listOf(
+                        Icons.Default.DateRange to 0,
+                        Icons.Default.Image to 1,
+                        Icons.Default.Settings to 2
+                    )
+                    navItems.forEach { (icon, index) ->
+                        val isSelected = selectedTab == index
+                        Box(
+                            modifier = Modifier
+                                .size(width = 56.dp, height = 48.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (isSelected) {
+                                        if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f)
+                                        else Color.White
+                                    } else Color.Transparent
+                                )
+                                .clickable { selectedTab = index },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = if (isSelected) {
+                                    if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.primary
+                                } else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Save Button
+                IconButton(
+                    onClick = onSave,
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                        .size(64.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = stringResource(R.string.save),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Preview Card Area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .height(200.dp)
+            ) {
+                // Simplified Preview
                 val previewEvent = CountdownEvent(
                     id = "preview",
                     name = name.ifBlank { stringResource(R.string.event_name) },
@@ -1249,215 +1562,39 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     backgroundImageUri = backgroundImageUri,
                     widgetImageUri = widgetImageUri,
                     backgroundBrightness = backgroundBrightness,
-                    createdAt = System.currentTimeMillis()
+                    createdAt = initialEvent?.createdAt ?: System.currentTimeMillis(),
+                    notificationContent = null,
+                    reminderMinutesBefore = null,
+                    repeatType = null,
+                    repeatInterval = null,
+                    repeatUnit = null,
+                    customFontPath = customFontPath
                 )
-                
-                Spacer(modifier = Modifier.height(24.dp))
                 CountdownItem(
                     event = previewEvent,
-                    now = previewNow,
-                    showActions = false
+                    onEdit = {},
+                    onDelete = {},
+                    showActions = false,
+                    now = previewNow
                 )
+            }
 
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.event_name)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        disabledContainerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Surface(
-                        onClick = { showDatePicker = true },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Default.DateRange, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(selectedDate.toString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                    }
-                    Surface(
-                        onClick = { showTimePicker = true },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Default.AccessTime, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(selectedTime.toString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Color Section Card
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                        .clickable { showColorPicker = true }
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = stringResource(R.string.card_color), 
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = selectedColorHex ?: String.format(LocalConfiguration.current.locales[0], "#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(
-                                selectedColorHex?.let { Color(it.toColorInt()) } ?: MaterialTheme.colorScheme.primary,
-                                CircleShape
-                            )
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Background Image Section Card
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.background_image), 
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (backgroundImageUri != null) {
-                            Text(
-                                stringResource(R.string.image_selected),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.clickable { imagePickerLauncher.launch(arrayOf("image/*")) }
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            IconButton(
-                                onClick = { 
-                                    backgroundImageUri = null
-                                    widgetImageUri = null
-                                },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                            }
-                        } else {
-                            IconButton(
-                                onClick = { imagePickerLauncher.launch(arrayOf("image/*")) },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AddPhotoAlternate, 
-                                    contentDescription = null, 
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (backgroundImageUri != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                            .padding(horizontal = 24.dp, vertical = 12.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.background_brightness), 
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Slider(
-                            value = backgroundBrightness,
-                            onValueChange = { backgroundBrightness = it },
-                            valueRange = 0f..1f,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Notification Section Card
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                        .clickable { isReminderExpanded = !isReminderExpanded }
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.reminder_settings), 
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Icon(
-                        imageVector = if (isReminderExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                
-                if (isReminderExpanded) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val isNotificationPartEnabled = globalNotificationsEnabled && hasNotificationPermission
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                            .padding(20.dp)
-                            .alpha(if (isNotificationPartEnabled) 1f else 0.5f)
-                    ) {
+            // Tab Content
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+            ) {
+                when (selectedTab) {
+                    0 -> {
+                        // Date Time & Name UI
+                        Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
-                            value = notificationContent,
-                            onValueChange = { notificationContent = it },
-                            label = { Text(stringResource(R.string.reminder_content)) },
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text(stringResource(R.string.event_name)) },
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text(stringResource(R.string.placeholder_title)) },
-                            enabled = isNotificationPartEnabled,
+                            singleLine = true,
                             shape = RoundedCornerShape(24.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -1466,20 +1603,242 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                             )
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                        ExposedDropdownMenuBox(
-                            expanded = isReminderMenuExpanded && isNotificationPartEnabled,
-                            onExpandedChange = { if (isNotificationPartEnabled) isReminderMenuExpanded = it },
-                            modifier = Modifier.fillMaxWidth()
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Surface(
+                                onClick = { showDatePicker = true },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Icons.Default.DateRange, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(selectedDate.toString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                            }
+                            Surface(
+                                onClick = { showTimePicker = true },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Icons.Default.AccessTime, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(selectedTime.toString(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                            }
+                        }
+                    }
+                    1 -> {
+                        // Image & Color UI
+                        Spacer(modifier = Modifier.height(8.dp))
+                        // Color Section Card
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                .clickable { showColorPicker = true }
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.card_color), 
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = selectedColorHex ?: String.format(LocalConfiguration.current.locales[0], "#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        selectedColorHex?.let { Color(it.toColorInt()) } ?: MaterialTheme.colorScheme.primary,
+                                        CircleShape
+                                    )
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Background Image Section Card
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.background_image), 
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (backgroundImageUri != null) {
+                                    Text(
+                                        stringResource(R.string.image_selected),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.clickable { imagePickerLauncher.launch(arrayOf("image/*")) }
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    IconButton(
+                                        onClick = { 
+                                            backgroundImageUri = null
+                                            widgetImageUri = null
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                    }
+                                } else {
+                                    IconButton(
+                                        onClick = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AddPhotoAlternate, 
+                                            contentDescription = null, 
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (backgroundImageUri != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.background_brightness), 
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Slider(
+                                    value = backgroundBrightness,
+                                    onValueChange = { backgroundBrightness = it },
+                                    valueRange = 0f..1f,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Custom Font Section Card
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.custom_font), 
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                if (customFontPath != null) {
+                                    Text(
+                                        text = File(customFontPath!!).name,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) }
+                                ) {
+                                    Icon(Icons.Default.TextFields, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                                if (customFontPath != null) {
+                                    IconButton(onClick = { customFontPath = null }) {
+                                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    2 -> {
+                        // Reminder & Repeat UI
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Reminder Section Header
+                        Text(
+                            text = stringResource(R.string.reminder_settings),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                        )
+                        
+                        val isNotificationPartEnabled = globalNotificationsEnabled && hasNotificationPermission
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                .padding(20.dp)
+                                .alpha(if (isNotificationPartEnabled) 1f else 0.5f)
+                        ) {
+                            if (!hasNotificationPermission) {
+                                Text(
+                                    text = stringResource(R.string.notif_permission_msg),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                Text(
+                                    text = stringResource(R.string.go_to_settings),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(bottom = 16.dp).clickable {
+                                        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        }
+                                        context.startActivity(intent)
+                                    }
+                                )
+                            } else if (!globalNotificationsEnabled) {
+                                Text(
+                                    text = stringResource(R.string.notif_disabled_msg),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
+                            }
+
                             OutlinedTextField(
-                                value = reminderOptions.find { it.first == reminderMinutes }?.second ?: stringResource(R.string.no_reminder),
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text(stringResource(R.string.reminder_time)) },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isReminderMenuExpanded) },
-                                modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true).fillMaxWidth(),
+                                value = notificationContent,
+                                onValueChange = { notificationContent = it },
+                                label = { Text(stringResource(R.string.reminder_content)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text(stringResource(R.string.placeholder_title)) },
                                 enabled = isNotificationPartEnabled,
                                 shape = RoundedCornerShape(24.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -1488,136 +1847,21 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     disabledContainerColor = MaterialTheme.colorScheme.surface
                                 )
                             )
-                            ExposedDropdownMenu(
-                                expanded = isReminderMenuExpanded,
-                                onDismissRequest = { isReminderMenuExpanded = false }
-                            ) {
-                                reminderOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.second) },
-                                        onClick = {
-                                            reminderMinutes = option.first
-                                            isReminderMenuExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        
-                        if (!globalNotificationsEnabled) {
-                            Text(
-                                stringResource(R.string.notif_disabled_msg),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        } else if (!hasNotificationPermission) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                                Text(
-                                    stringResource(R.string.notif_permission_msg),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    stringResource(R.string.go_to_settings),
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        textDecoration = TextDecoration.Underline,
-                                        color = MaterialTheme.colorScheme.primary
-                                    ),
-                                    modifier = Modifier.clickable {
-                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                            data = Uri.fromParts("package", context.packageName, null)
-                                        }
-                                        context.startActivity(intent)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Repeat Section Card
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                        .clickable { isRepeatExpanded = !isRepeatExpanded }
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.repeat_settings), 
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Icon(
-                        imageVector = if (isRepeatExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-
-                if (isRepeatExpanded) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                            .padding(20.dp)
-                    ) {
-                        ExposedDropdownMenuBox(
-                            expanded = isRepeatMenuExpanded,
-                            onExpandedChange = { isRepeatMenuExpanded = it },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedTextField(
-                                value = repeatOptions.find { it.first == repeatType }?.second ?: stringResource(R.string.repeat_none),
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text(stringResource(R.string.repeat_mode)) },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatMenuExpanded) },
-                                modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true).fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surface
-                                )
-                            )
-                            ExposedDropdownMenu(
-                                expanded = isRepeatMenuExpanded,
-                                onDismissRequest = { isRepeatMenuExpanded = false }
-                            ) {
-                                repeatOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.second) },
-                                        onClick = {
-                                            repeatType = option.first
-                                            isRepeatMenuExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        if (repeatType == "custom") {
                             Spacer(modifier = Modifier.height(12.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+
+                            ExposedDropdownMenuBox(
+                                expanded = isReminderMenuExpanded && isNotificationPartEnabled,
+                                onExpandedChange = { if (isNotificationPartEnabled) isReminderMenuExpanded = it },
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 OutlinedTextField(
-                                    value = repeatInterval,
-                                    onValueChange = { if (it.all { char -> char.isDigit() }) repeatInterval = it },
-                                    label = { Text(stringResource(R.string.repeat_every)) },
-                                    modifier = Modifier.weight(1f),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
+                                    value = reminderOptions.find { it.first == reminderMinutes }?.second ?: stringResource(R.string.no_reminder),
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isReminderMenuExpanded) },
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                    enabled = isNotificationPartEnabled,
                                     shape = RoundedCornerShape(24.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -1625,19 +1869,81 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                         disabledContainerColor = MaterialTheme.colorScheme.surface
                                     )
                                 )
-                                
-                                ExposedDropdownMenuBox(
-                                    expanded = isRepeatUnitMenuExpanded,
-                                    onExpandedChange = { isRepeatUnitMenuExpanded = it },
-                                    modifier = Modifier.weight(1f)
+                                ExposedDropdownMenu(
+                                    expanded = isReminderMenuExpanded,
+                                    onDismissRequest = { isReminderMenuExpanded = false }
                                 ) {
+                                    reminderOptions.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option.second) },
+                                            onClick = {
+                                                reminderMinutes = option.first
+                                                isReminderMenuExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Repeat Section Header
+                        Text(
+                            text = stringResource(R.string.repeat_settings),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                        )
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                .padding(20.dp)
+                        ) {
+                            ExposedDropdownMenuBox(
+                                expanded = isRepeatMenuExpanded,
+                                onExpandedChange = { isRepeatMenuExpanded = it },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = repeatOptions.find { it.first == repeatType }?.second ?: stringResource(R.string.repeat_none),
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatMenuExpanded) },
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        disabledContainerColor = MaterialTheme.colorScheme.surface
+                                    )
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = isRepeatMenuExpanded,
+                                    onDismissRequest = { isRepeatMenuExpanded = false }
+                                ) {
+                                    repeatOptions.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option.second) },
+                                            onClick = {
+                                                repeatType = option.first
+                                                isRepeatMenuExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (repeatType == "custom") {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(
-                                        value = repeatUnits.find { it.first == repeatUnit }?.second ?: stringResource(R.string.unit_days),
-                                        onValueChange = {},
-                                        readOnly = true,
-                                        label = { Text(stringResource(R.string.repeat_unit)) },
-                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatUnitMenuExpanded) },
-                                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true).fillMaxWidth(),
+                                        value = repeatInterval,
+                                        onValueChange = { repeatInterval = it },
+                                        label = { Text(stringResource(R.string.repeat_every)) },
+                                        modifier = Modifier.weight(1f),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         shape = RoundedCornerShape(24.dp),
                                         colors = OutlinedTextFieldDefaults.colors(
                                             focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -1645,18 +1951,38 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                             disabledContainerColor = MaterialTheme.colorScheme.surface
                                         )
                                     )
-                                    ExposedDropdownMenu(
+                                    ExposedDropdownMenuBox(
                                         expanded = isRepeatUnitMenuExpanded,
-                                        onDismissRequest = { isRepeatUnitMenuExpanded = false }
+                                        onExpandedChange = { isRepeatUnitMenuExpanded = it },
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        repeatUnits.forEach { option ->
-                                            DropdownMenuItem(
-                                                text = { Text(option.second) },
-                                                onClick = {
-                                                    repeatUnit = option.first
-                                                    isRepeatUnitMenuExpanded = false
-                                                }
+                                        OutlinedTextField(
+                                            value = repeatUnits.find { it.first == repeatUnit }?.second ?: stringResource(R.string.unit_days),
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text(stringResource(R.string.repeat_unit)) },
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatUnitMenuExpanded) },
+                                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                            shape = RoundedCornerShape(24.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                disabledContainerColor = MaterialTheme.colorScheme.surface
                                             )
+                                        )
+                                        ExposedDropdownMenu(
+                                            expanded = isRepeatUnitMenuExpanded,
+                                            onDismissRequest = { isRepeatUnitMenuExpanded = false }
+                                        ) {
+                                            repeatUnits.forEach { unit ->
+                                                DropdownMenuItem(
+                                                    text = { Text(unit.second) },
+                                                    onClick = {
+                                                        repeatUnit = unit.first
+                                                        isRepeatUnitMenuExpanded = false
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1664,8 +1990,6 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
@@ -1713,431 +2037,32 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
         ColorPickerDialog(
             initialColorHex = selectedColorHex ?: String.format("#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())),
             showFollowSystem = false,
+            savedColors = savedColors,
+            onDeleteSavedColor = { scope.launch { dataManager.removeSavedColor(it) } },
+            onSaveColor = { scope.launch { dataManager.addSavedColor(it) } },
             onDismiss = { showColorPicker = false },
             onColorSelected = { selectedColorHex = it }
         )
     }
 
     if (cropOriginalUri != null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            val cropContext = LocalContext.current
-            var cropBitmap by remember(cropOriginalUri) { mutableStateOf<Bitmap?>(null) }
-            
-            LaunchedEffect(cropOriginalUri) {
-                cropOriginalUri?.let { uri ->
-                    try {
-                        cropContext.contentResolver.openInputStream(uri)?.use { stream ->
-                            cropBitmap = BitmapFactory.decodeStream(stream)
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+        ImageCropOverlay(
+            originalUri = cropOriginalUri!!,
+            initialRatio = 0.5f, // 2:1 ratio (Height / Width)
+            showRatioToggle = true,
+            onCropDone = { uri, isSecondStep ->
+                if (!isSecondStep) {
+                    backgroundImageUri = uri
+                    // Auto-trigger widget crop (1:1)
+                    // We need a way to tell the overlay to continue to the next step
+                } else {
+                    widgetImageUri = uri
+                    cropOriginalUri = null
                 }
-            }
-
-            var rotation by remember { mutableFloatStateOf(0f) }
-            var isMirrored by remember { mutableStateOf(false) }
-            var cropRatio by remember { mutableFloatStateOf(2f) } 
-            
-            var scale by remember { mutableFloatStateOf(1f) }
-            var offset by remember { mutableStateOf(Offset.Zero) }
-            var containerWidthState by remember { mutableFloatStateOf(0f) }
-            var containerHeightState by remember { mutableFloatStateOf(0f) }
-
-            val cropImagePickerLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.OpenDocument(),
-                onResult = { uri ->
-                    uri?.let {
-                        cropOriginalUri = it
-                        rotation = 0f
-                        isMirrored = false
-                        scale = 1f
-                        offset = Offset.Zero
-                    }
-                }
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-            ) {
-                // Custom Top Bar Area
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                            .padding(horizontal = 24.dp, vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.crop_title),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            fontSize = 20.sp
-                        )
-                    }
-                    
-                    IconButton(
-                        onClick = { cropOriginalUri = null },
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
-                            .size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-
-                // Crop Window Area
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp)
-                ) {
-                    if (cropBitmap != null) {
-                        val bitmapVal = cropBitmap!!
-                        BoxWithConstraints(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer(clip = true)
-                                .pointerInput(Unit) {
-                                    detectTransformGestures { _, pan, zoom, _ ->
-                                        scale = (scale * zoom).coerceIn(0.5f, 5f)
-                                        offset += pan
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val containerWidthPx = constraints.maxWidth.toFloat()
-                            val containerHeightPx = constraints.maxHeight.toFloat()
-                            
-                            SideEffect {
-                                containerWidthState = containerWidthPx
-                                containerHeightState = containerHeightPx
-                            }
-                            
-                            val fitScale = remember(bitmapVal, containerWidthPx, containerHeightPx) {
-                                kotlin.math.min(containerWidthPx / bitmapVal.width, containerHeightPx / bitmapVal.height)
-                            }
-                            val layoutImgW = bitmapVal.width * fitScale
-                            val layoutImgH = bitmapVal.height * fitScale
-                            
-                            val density = LocalDensity.current
-                            val cropWidthPx = containerWidthPx - with(density) { 64.dp.toPx() }
-                            val cropHeightPx = if (cropRatio == 2f) cropWidthPx / 2f else cropWidthPx
-                            
-                            val left = (containerWidthPx - cropWidthPx) / 2f
-                            val top = (containerHeightPx - cropHeightPx) / 2f
-
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    bitmap = bitmapVal.asImageBitmap(),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(
-                                            width = with(density) { layoutImgW.toDp() },
-                                            height = with(density) { layoutImgH.toDp() }
-                                        )
-                                        .graphicsLayer(
-                                            scaleX = scale * (if (isMirrored) -1f else 1f),
-                                            scaleY = scale,
-                                            rotationZ = rotation,
-                                            translationX = offset.x,
-                                            translationY = offset.y
-                                        )
-                                )
-                            }
-                            
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .pointerInput(Unit) {
-                                        detectTransformGestures { _, pan, zoom, _ ->
-                                            scale = (scale * zoom).coerceIn(0.5f, 5f)
-                                            offset += pan
-                                        }
-                                    }
-                                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                                    .drawWithContent {
-                                        drawContent()
-                                        
-                                        drawRect(color = Color.Black.copy(alpha = 0.6f))
-                                        
-                                        drawRect(
-                                            color = Color.Transparent,
-                                            topLeft = Offset(left, top),
-                                            size = Size(cropWidthPx, cropHeightPx),
-                                            blendMode = BlendMode.Clear
-                                        )
-                                        
-                                        drawRect(
-                                            color = Color.White,
-                                            topLeft = Offset(left - 1.dp.toPx(), top - 1.dp.toPx()),
-                                            size = Size(cropWidthPx + 2.dp.toPx(), cropHeightPx + 2.dp.toPx()),
-                                            style = Stroke(width = 2.dp.toPx())
-                                        )
-                                    }
-                            )
-                        }
-                    } else {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    }
-                }
-
-                // Bottom Control Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                            .height(48.dp)
-                            .padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-
-                        Slider(
-                            value = scale,
-                            onValueChange = { scale = it },
-                            valueRange = 0.5f..5.0f,
-                            modifier = Modifier.weight(1f),
-                            colors = SliderDefaults.colors(
-                                activeTrackColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                inactiveTrackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f),
-                                thumbColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-                                .width(88.dp)
-                                .height(38.dp)
-                                .padding(3.dp)
-                        ) {
-                            val isLeftSelected = cropRatio == 2f
-                            val alignment = if (isLeftSelected) Alignment.CenterStart else Alignment.CenterEnd
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(38.dp)
-                                    .align(alignment)
-                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        modifier = Modifier.wrapContentSize(),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(13.dp)
-                                                .height(4.dp)
-                                                .background(Color.Black, RoundedCornerShape(1.dp))
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .width(13.dp)
-                                                .height(4.dp)
-                                                .background(Color.Black, RoundedCornerShape(1.dp))
-                                        )
-                                    }
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        modifier = Modifier.wrapContentSize(),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(1.5.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(width = 5.5.dp, height = 4.dp)
-                                                    .background(Color.Black, RoundedCornerShape(1.dp))
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(width = 5.5.dp, height = 4.dp)
-                                                    .background(Color.Black, RoundedCornerShape(1.dp))
-                                            )
-                                        }
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(1.5.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(width = 5.5.dp, height = 4.dp)
-                                                    .background(Color.Black, RoundedCornerShape(1.dp))
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(width = 5.5.dp, height = 4.dp)
-                                                    .background(Color.Black, RoundedCornerShape(1.dp))
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        IconButton(
-                            onClick = { cropImagePickerLauncher.launch(arrayOf("image/*")) }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AddPhotoAlternate,
-                                contentDescription = "Reselect",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-
-                        val currentDensity = LocalDensity.current.density
-                        IconButton(
-                            onClick = {
-                                cropBitmap?.let { bitmapVal ->
-                                    scope.launch(Dispatchers.IO) {
-                                        try {
-                                            // Calculate fit scale and crop window dimensions based on hoisted containerState sizes
-                                            val fitScale = kotlin.math.min(containerWidthState / bitmapVal.width, containerHeightState / bitmapVal.height)
-                                            val cropWidthPx = containerWidthState - 64 * currentDensity
-                                            val cropHeightPx = if (cropRatio == 2f) cropWidthPx / 2f else cropWidthPx
-                                            
-                                            val left = (containerWidthState - cropWidthPx) / 2f
-                                            val top = (containerHeightState - cropHeightPx) / 2f
-                                            
-                                            val targetW = if (cropRatio == 2f) 1200 else 800
-                                            val targetH = if (cropRatio == 2f) 600 else 800
-                                            val outScale = targetW.toFloat() / cropWidthPx
-                                            
-                                            val croppedBitmap = createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-                                            val canvas = android.graphics.Canvas(croppedBitmap)
-                                            
-                                            val matrix = android.graphics.Matrix()
-                                            
-                                            // 1. Center the bitmap at (0,0)
-                                            matrix.postTranslate(-bitmapVal.width / 2f, -bitmapVal.height / 2f)
-                                            
-                                            // 2. Apply mirroring
-                                            if (isMirrored) {
-                                                matrix.postScale(-1f, 1f)
-                                            }
-                                            
-                                            // 3. Apply rotation
-                                            matrix.postRotate(rotation)
-                                            
-                                            // 4. Apply scale (fitScale * scale)
-                                            val totalScale = fitScale * scale
-                                            matrix.postScale(totalScale, totalScale)
-                                            
-                                            // 5. Apply pan offset
-                                            matrix.postTranslate(offset.x, offset.y)
-                                            
-                                            // 6. Translate to the center of the container
-                                            matrix.postTranslate(containerWidthState / 2f, containerHeightState / 2f)
-                                            
-                                            // 7. Translate to (0,0) relative to crop window
-                                            matrix.postTranslate(-left, -top)
-                                            
-                                            // 8. Scale to target output bitmap size
-                                            matrix.postScale(outScale, outScale)
-                                            
-                                            val paint = android.graphics.Paint().apply {
-                                                isFilterBitmap = true
-                                                isAntiAlias = true
-                                            }
-                                            canvas.drawBitmap(bitmapVal, matrix, paint)
-                                            
-                                            val cacheFile = File(cropContext.cacheDir, "cropped_image_${System.currentTimeMillis()}.jpg")
-                                            FileOutputStream(cacheFile).use { out ->
-                                                croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
-                                            }
-                                            val croppedUriStr = Uri.fromFile(cacheFile).toString()
-                                            
-                                            withContext(Dispatchers.Main) {
-                                                if (cropRatio == 2f) {
-                                                    backgroundImageUri = croppedUriStr
-                                                    // First step (Big Card) done. Instantly switch to second step (Small Card / Widget)!
-                                                    cropRatio = 1f
-                                                    scale = 1f
-                                                    offset = Offset.Zero
-                                                    rotation = 0f
-                                                    isMirrored = false
-                                                } else {
-                                                    widgetImageUri = croppedUriStr
-                                                    // Second step (Small Card / Widget) done. Close the crop screen overlay!
-                                                    cropOriginalUri = null
-                                                }
-                                            }
-                                        } catch (_: Exception) {
-                                            // Handle or ignore
-                                        }
-                                    }
-                                }
-                            },
-                            modifier = Modifier
-                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                                .size(56.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Confirm",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                }
-            }
-        }
+            },
+            onDismiss = { cropOriginalUri = null },
+            onReselect = { imagePickerLauncher.launch(arrayOf("image/*")) }
+        )
     }
 }
 
@@ -2150,6 +2075,24 @@ fun CountdownItem(
     onEdit: () -> Unit = {},
     onDelete: () -> Unit = {}
 ) {
+    val customFontFamily = remember(event.customFontPath) {
+        event.customFontPath?.let { path ->
+            try {
+                val file = File(path)
+                FontFamily(
+                    Font(file, weight = FontWeight.Normal),
+                    Font(file, weight = FontWeight.Medium),
+                    Font(file, weight = FontWeight.SemiBold),
+                    Font(file, weight = FontWeight.Bold),
+                    Font(file, weight = FontWeight.ExtraBold),
+                    Font(file, weight = FontWeight.Black)
+                )
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
     // Calculate the next occurrence if it's a recurring event and passed
     val target = event.calculateTarget(now)
 
@@ -2191,7 +2134,7 @@ fun CountdownItem(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(Color.Black.copy(alpha = 1f - event.backgroundBrightness))
+                        .background(Color.Black.copy(alpha = event.backgroundBrightness))
                 ) {}
             }
             Column(
@@ -2207,12 +2150,14 @@ fun CountdownItem(
                         text = event.name,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.ExtraBold,
-                        color = titleColor
+                        color = titleColor,
+                        fontFamily = customFontFamily
                     )
                     Text(
                         text = "${stringResource(R.string.target)}${target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = titleColor.copy(alpha = 0.7f)
+                        color = titleColor.copy(alpha = 0.7f),
+                        fontFamily = customFontFamily
                     )
                 }
                 if (showActions) {
@@ -2243,14 +2188,16 @@ fun CountdownItem(
                             fontSize = 56.sp,
                             fontWeight = FontWeight.Black,
                             color = numberColor,
-                            lineHeight = 56.sp
+                            lineHeight = 56.sp,
+                            fontFamily = customFontFamily
                         )
                         Text(
                             text = unit + stringResource(R.string.ago_suffix),
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold,
                             color = numberColor,
-                            modifier = Modifier.padding(bottom = 6.dp, start = 2.dp)
+                            modifier = Modifier.padding(bottom = 6.dp, start = 2.dp),
+                            fontFamily = customFontFamily
                         )
                     }
                 } else {
@@ -2265,14 +2212,16 @@ fun CountdownItem(
                             fontSize = 56.sp,
                             fontWeight = FontWeight.Black,
                             color = numberColor,
-                            lineHeight = 56.sp
+                            lineHeight = 56.sp,
+                            fontFamily = customFontFamily
                         )
                         Text(
                             text = stringResource(R.string.unit_days),
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold,
                             color = numberColor,
-                            modifier = Modifier.padding(bottom = 6.dp, start = 2.dp)
+                            modifier = Modifier.padding(bottom = 6.dp, start = 2.dp),
+                            fontFamily = customFontFamily
                         )
                         
                         Spacer(modifier = Modifier.width(12.dp))
@@ -2286,41 +2235,47 @@ fun CountdownItem(
                                 text = hours.toString(),
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = numberColor
+                                color = numberColor,
+                                fontFamily = customFontFamily
                             )
                             Text(
                                 text = stringResource(R.string.unit_hours),
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = numberColor,
-                                modifier = Modifier.padding(start = 2.dp, end = 8.dp)
+                                modifier = Modifier.padding(start = 2.dp, end = 8.dp),
+                                fontFamily = customFontFamily
                             )
                             Text(
                                 text = minutes.toString(),
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = numberColor
+                                color = numberColor,
+                                fontFamily = customFontFamily
                             )
                             Text(
                                 text = stringResource(R.string.unit_minutes),
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = numberColor,
-                                modifier = Modifier.padding(start = 2.dp, end = 8.dp)
+                                modifier = Modifier.padding(start = 2.dp, end = 8.dp),
+                                fontFamily = customFontFamily
                             )
                             if (days == 0L && hours == 0L) {
                                 Text(
                                     text = seconds.toString(),
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = numberColor
+                                    color = numberColor,
+                                    fontFamily = customFontFamily
                                 )
                                 Text(
                                     text = stringResource(R.string.unit_seconds),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = numberColor,
-                                    modifier = Modifier.padding(start = 2.dp)
+                                    modifier = Modifier.padding(start = 2.dp),
+                                    fontFamily = customFontFamily
                                 )
                             }
                         }
@@ -2376,6 +2331,24 @@ fun SmallCountdownItem(
     onEdit: () -> Unit = {},
     onDelete: () -> Unit = {}
 ) {
+    val customFontFamily = remember(event.customFontPath) {
+        event.customFontPath?.let { path ->
+            try {
+                val file = File(path)
+                FontFamily(
+                    Font(file, weight = FontWeight.Normal),
+                    Font(file, weight = FontWeight.Medium),
+                    Font(file, weight = FontWeight.SemiBold),
+                    Font(file, weight = FontWeight.Bold),
+                    Font(file, weight = FontWeight.ExtraBold),
+                    Font(file, weight = FontWeight.Black)
+                )
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
     val target = event.calculateTarget(now)
 
     val duration = Duration.between(now, target)
@@ -2415,7 +2388,7 @@ fun SmallCountdownItem(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(Color.Black.copy(alpha = 1f - event.backgroundBrightness))
+                        .background(Color.Black.copy(alpha = event.backgroundBrightness))
                 ) {}
             }
             Column(
@@ -2433,19 +2406,22 @@ fun SmallCountdownItem(
                             fontWeight = FontWeight.Bold,
                             color = titleColor,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            fontFamily = customFontFamily
                         )
                         Text(
                             text = stringResource(R.string.target),
                             style = MaterialTheme.typography.labelSmall,
-                            color = titleColor.copy(alpha = 0.7f)
+                            color = titleColor.copy(alpha = 0.7f),
+                            fontFamily = customFontFamily
                         )
                         Text(
                             text = target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)),
                             style = MaterialTheme.typography.labelSmall,
                             color = titleColor.copy(alpha = 0.7f),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            fontFamily = customFontFamily
                         )
                     }
                     if (showActions) {
@@ -2473,14 +2449,16 @@ fun SmallCountdownItem(
                                     fontSize = 32.sp,
                                     fontWeight = FontWeight.Black,
                                     color = numberColor,
-                                    lineHeight = 32.sp
+                                    lineHeight = 32.sp,
+                                    fontFamily = customFontFamily
                                 )
                                 Text(
                                     text = unit + stringResource(R.string.ago_suffix),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = numberColor,
-                                    modifier = Modifier.padding(bottom = 4.dp, start = 2.dp)
+                                    modifier = Modifier.padding(bottom = 4.dp, start = 2.dp),
+                                    fontFamily = customFontFamily
                                 )
                             }
                         } else {
@@ -2491,14 +2469,16 @@ fun SmallCountdownItem(
                                         fontSize = 36.sp,
                                         fontWeight = FontWeight.Black,
                                         color = numberColor,
-                                        lineHeight = 36.sp
+                                        lineHeight = 36.sp,
+                                        fontFamily = customFontFamily
                                     )
                                     Text(
                                         text = stringResource(R.string.unit_days),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = numberColor,
-                                        modifier = Modifier.padding(bottom = 4.dp, start = 2.dp)
+                                        modifier = Modifier.padding(bottom = 4.dp, start = 2.dp),
+                                        fontFamily = customFontFamily
                                     )
                                 }
                             } else {
@@ -2512,7 +2492,8 @@ fun SmallCountdownItem(
                                     fontSize = 36.sp,
                                     fontWeight = FontWeight.Black,
                                     color = numberColor,
-                                    lineHeight = 36.sp
+                                    lineHeight = 36.sp,
+                                    fontFamily = customFontFamily
                                 )
                             }
                         }
@@ -2543,6 +2524,295 @@ fun SmallCountdownItem(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun ImageCropOverlay(
+    originalUri: Uri,
+    initialRatio: Float,
+    onCropDone: (String, Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onReselect: () -> Unit,
+    showRatioToggle: Boolean = true
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var cropBitmap by remember(originalUri) { mutableStateOf<Bitmap?>(null) }
+    
+    LaunchedEffect(originalUri) {
+        try {
+            context.contentResolver.openInputStream(originalUri)?.use { stream ->
+                cropBitmap = BitmapFactory.decodeStream(stream)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    var rotation by remember { mutableFloatStateOf(0f) }
+    var isMirrored by remember { mutableStateOf(false) }
+    var cropRatio by remember { mutableFloatStateOf(initialRatio) } 
+    var isSecondStep by remember { mutableStateOf(false) }
+    
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var containerWidthState by remember { mutableFloatStateOf(0f) }
+    var containerHeightState by remember { mutableFloatStateOf(0f) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        if (cropBitmap != null) {
+            val bitmapVal = cropBitmap!!
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(clip = true)
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(0.5f, 5f)
+                            offset += pan
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                val containerWidthPx = constraints.maxWidth.toFloat()
+                val containerHeightPx = constraints.maxHeight.toFloat()
+                
+                SideEffect {
+                    containerWidthState = containerWidthPx
+                    containerHeightState = containerHeightPx
+                }
+                
+                val fitScale = remember(bitmapVal, containerWidthPx, containerHeightPx) {
+                    kotlin.math.min(containerWidthPx / bitmapVal.width, containerHeightPx / bitmapVal.height)
+                }
+                val layoutImgW = bitmapVal.width * fitScale
+                val layoutImgH = bitmapVal.height * fitScale
+                
+                val density = LocalDensity.current
+                val cropWidthPx = containerWidthPx - with(density) { 64.dp.toPx() }
+                val cropHeightPx = cropWidthPx * cropRatio
+                
+                val left = (containerWidthPx - cropWidthPx) / 2f
+                val top = (containerHeightPx - cropHeightPx) / 2f
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        bitmap = bitmapVal.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(
+                                width = with(density) { layoutImgW.toDp() },
+                                height = with(density) { layoutImgH.toDp() }
+                            )
+                            .graphicsLayer(
+                                scaleX = scale * (if (isMirrored) -1f else 1f),
+                                scaleY = scale,
+                                rotationZ = rotation,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            )
+                    )
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(0.5f, 5f)
+                                offset += pan
+                            }
+                        }
+                        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(color = Color.Black.copy(alpha = 0.6f))
+                            drawRect(
+                                color = Color.Transparent,
+                                topLeft = Offset(left, top),
+                                size = Size(cropWidthPx, cropHeightPx),
+                                blendMode = BlendMode.Clear
+                            )
+                            drawRect(
+                                color = Color.White,
+                                topLeft = Offset(left - 1.dp.toPx(), top - 1.dp.toPx()),
+                                size = Size(cropWidthPx + 2.dp.toPx(), cropHeightPx + 2.dp.toPx()),
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+                        }
+                )
+            }
+        } else {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        }
+
+        // Top Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .statusBarsPadding(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val stepText = if (showRatioToggle) {
+                    if (isSecondStep) " (2/2)" else " (1/2)"
+                } else ""
+                Text(
+                    text = stringResource(R.string.crop_title) + stepText,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontSize = 20.sp
+                )
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
+                    .size(48.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
+
+        // Bottom Control Row
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 24.dp)
+                .navigationBarsPadding(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                    .height(48.dp)
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                Slider(
+                    value = scale,
+                    onValueChange = { scale = it },
+                    valueRange = 0.5f..5.0f,
+                    modifier = Modifier.weight(1f),
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        inactiveTrackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f),
+                        thumbColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                )
+
+                if (showRatioToggle) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                            .width(88.dp)
+                            .height(38.dp)
+                            .padding(3.dp)
+                    ) {
+                        val isLeftSelected = cropRatio == 0.5f
+                        val alignment = if (isLeftSelected) Alignment.CenterStart else Alignment.CenterEnd
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(38.dp)
+                                .align(alignment)
+                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                                // Non-clickable highlight as requested
+                        )
+                        Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Box(modifier = Modifier.width(13.dp).height(4.dp).background(Color.Black, RoundedCornerShape(1.dp)))
+                                    Box(modifier = Modifier.width(13.dp).height(4.dp).background(Color.Black, RoundedCornerShape(1.dp)))
+                                }
+                            }
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(1.5.dp)) {
+                                        Box(modifier = Modifier.size(width = 5.5.dp, height = 4.dp).background(Color.Black, RoundedCornerShape(1.dp)))
+                                        Box(modifier = Modifier.size(width = 5.5.dp, height = 4.dp).background(Color.Black, RoundedCornerShape(1.dp)))
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(1.5.dp)) {
+                                        Box(modifier = Modifier.size(width = 5.5.dp, height = 4.dp).background(Color.Black, RoundedCornerShape(1.dp)))
+                                        Box(modifier = Modifier.size(width = 5.5.dp, height = 4.dp).background(Color.Black, RoundedCornerShape(1.dp)))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                IconButton(onClick = onReselect) {
+                    Icon(Icons.Default.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+
+            val currentDensity = LocalDensity.current.density
+            IconButton(
+                onClick = {
+                    cropBitmap?.let { bitmapVal ->
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                val fitScale = kotlin.math.min(containerWidthState / bitmapVal.width, containerHeightState / bitmapVal.height)
+                                val cropWidthPx = containerWidthState - 64 * currentDensity
+                                val cropHeightPx = cropWidthPx * cropRatio
+                                val left = (containerWidthState - cropWidthPx) / 2f
+                                val top = (containerHeightState - cropHeightPx) / 2f
+                                val targetW = if (cropRatio == 0.5f) 1200 else 800
+                                val targetH = (targetW * cropRatio).toInt()
+                                val outScale = targetW.toFloat() / cropWidthPx
+                                val croppedBitmap = createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+                                val matrix = android.graphics.Matrix()
+                                matrix.postTranslate(-bitmapVal.width / 2f, -bitmapVal.height / 2f)
+                                if (isMirrored) matrix.postScale(-1f, 1f)
+                                matrix.postRotate(rotation)
+                                matrix.postScale(fitScale * scale, fitScale * scale)
+                                matrix.postTranslate(offset.x, offset.y)
+                                matrix.postTranslate(containerWidthState / 2f, containerHeightState / 2f)
+                                matrix.postTranslate(-left, -top)
+                                matrix.postScale(outScale, outScale)
+                                android.graphics.Canvas(croppedBitmap).drawBitmap(bitmapVal, matrix, android.graphics.Paint().apply { isFilterBitmap = true; isAntiAlias = true })
+                                val cacheFile = File(context.cacheDir, "cropped_${System.currentTimeMillis()}.jpg")
+                                FileOutputStream(cacheFile).use { croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+                                val uriStr = Uri.fromFile(cacheFile).toString()
+                                withContext(Dispatchers.Main) {
+                                    if (showRatioToggle && !isSecondStep) {
+                                        onCropDone(uriStr, false)
+                                        isSecondStep = true
+                                        cropRatio = 1f; scale = 1f; offset = Offset.Zero
+                                    } else {
+                                        onCropDone(uriStr, true)
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
+                },
+                modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp)).size(56.dp)
+            ) {
+                Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(28.dp))
             }
         }
     }

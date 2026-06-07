@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
@@ -21,16 +22,6 @@ private val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
     tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
 )
 
 @Composable
@@ -44,24 +35,32 @@ fun CountDownTheme(
     val colorScheme = when {
         customColor != null -> {
             if (darkTheme) {
+                val containerColor = customColor.copy(alpha = 0.3f).compositeOver(Color(0xFF1C1B1F))
+                val secondaryContainerColor = customColor.copy(alpha = 0.2f).compositeOver(Color(0xFF1C1B1F))
                 darkColorScheme(
                     primary = customColor,
                     secondary = customColor,
                     tertiary = customColor,
-                    primaryContainer = customColor.copy(alpha = 0.3f),
+                    primaryContainer = containerColor,
                     onPrimaryContainer = Color.White,
+                    secondaryContainer = secondaryContainerColor,
+                    onSecondaryContainer = Color.White,
                     surface = Color(0xFF1C1B1F),
                     onSurface = Color.White,
                     background = Color(0xFF1C1B1F),
                     onBackground = Color.White
                 )
             } else {
+                val containerColor = customColor.copy(alpha = 0.15f).compositeOver(Color.White)
+                val secondaryContainerColor = customColor.copy(alpha = 0.1f).compositeOver(Color.White)
                 lightColorScheme(
                     primary = customColor,
                     secondary = customColor,
                     tertiary = customColor,
-                    primaryContainer = customColor.copy(alpha = 0.15f),
+                    primaryContainer = containerColor,
                     onPrimaryContainer = Color.Black,
+                    secondaryContainer = secondaryContainerColor,
+                    onSecondaryContainer = Color.Black,
                     surface = Color(0xFFFDFDFD),
                     onSurface = Color.Black,
                     background = Color(0xFFFDFDFD),

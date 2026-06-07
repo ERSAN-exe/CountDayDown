@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -8,6 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
+        android:contentDescription="@null"
         android:visibility="gone" />
 
     <ImageView
@@ -15,6 +17,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#000000"
+        android:contentDescription="@null"
         android:visibility="gone" />
 
     <LinearLayout
@@ -42,19 +45,31 @@
                 android:ellipsize="end" />
 
             <ImageView
+                android:id="@+id/widget_title_img"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_toStartOf="@+id/widget_edit_btn"
+                android:contentDescription="@null"
+                android:visibility="gone" />
+
+            <ImageView
                 android:id="@+id/widget_edit_btn"
                 android:layout_width="18dp"
                 android:layout_height="18dp"
                 android:layout_alignParentEnd="true"
                 android:alpha="0.6"
                 android:src="@drawable/ic_edit_pencil"
-                android:tint="#FFFFFF" />
+                android:contentDescription="@null"
+                app:tint="#FFFFFF" />
         </RelativeLayout>
 
-        <FrameLayout
+        <LinearLayout
+            android:id="@+id/widget_spacer"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:orientation="horizontal" />
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -67,10 +82,17 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:includeFontPadding="false"
-                android:text="389"
+                android:text="@string/remaining"
                 android:textColor="#FFFFFF"
                 android:textSize="34sp"
                 android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/widget_days_img"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@null"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/widget_days_unit"
@@ -82,6 +104,15 @@
                 android:textColor="#FFFFFF"
                 android:textSize="16sp"
                 android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/widget_days_unit_img"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="2dp"
+                android:layout_marginBottom="4dp"
+                android:contentDescription="@null"
+                android:visibility="gone" />
         </LinearLayout>
 
         <TextView
@@ -95,7 +126,14 @@
             android:textStyle="bold"
             android:alpha="0.9" />
 
-        <!-- Hidden but present to avoid RemoteViews errors -->
+        <ImageView
+            android:id="@+id/widget_time_img"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:contentDescription="@null"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/widget_target_label"
             android:layout_width="0dp"

@@ -7,9 +7,14 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import com.Zero23.countdown.MainActivity
@@ -52,8 +57,14 @@ class CountdownWidgetProvider : AppWidgetProvider() {
 
     private fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, event: CountdownEvent?) {
         val views = RemoteViews(context.packageName, R.layout.widget_layout)
+        val customTypeface = if (event?.customFontPath != null) {
+            try { Typeface.createFromFile(event.customFontPath) } catch (_: Exception) { null }
+        } else null
         
         if (event != null) {
+            val customColor = event.colorHex?.let { try { it.toColorInt() } catch(_: Exception) { null } }
+            val textColor = if (event.widgetImageUri != null) (customColor ?: Color.WHITE) else Color.WHITE
+
             // Background Image logic (2x2 uses widgetImageUri)
             if (event.widgetImageUri != null) {
                 try {
@@ -68,14 +79,7 @@ class CountdownWidgetProvider : AppWidgetProvider() {
                         val maskColor = (alpha shl 24) or 0x00000000
                         views.setInt(R.id.widget_background_overlay, "setBackgroundColor", maskColor)
                         
-                        views.setInt(R.id.widget_layout_root, "setBackgroundColor", android.graphics.Color.TRANSPARENT)
-                        
-                        val customColor = event.colorHex?.let { try { it.toColorInt() } catch(_: Exception) { null } }
-                        val textColor = customColor ?: android.graphics.Color.WHITE
-                        views.setTextColor(R.id.widget_title, textColor)
-                        views.setTextColor(R.id.widget_days, textColor)
-                        views.setTextColor(R.id.widget_days_unit, textColor)
-                        views.setTextColor(R.id.widget_time, textColor)
+                        views.setInt(R.id.widget_layout_root, "setBackgroundColor", Color.TRANSPARENT)
                         views.setInt(R.id.widget_edit_btn, "setColorFilter", textColor)
                     } else {
                         views.setViewVisibility(R.id.widget_background_image, View.GONE)
@@ -102,7 +106,10 @@ class CountdownWidgetProvider : AppWidgetProvider() {
             
             val isPast = days < 0 || (days == 0L && hours < 0) || (days == 0L && hours == 0L && minutes < 0)
             
-            views.setTextViewText(R.id.widget_title, event.name)
+            val actualTextColor = if (event.widgetImageUri != null) textColor else Color.WHITE
+            val secondaryTextColor = if (event.widgetImageUri != null) textColor else "#99000000".toColorInt()
+
+            setWidgetText(views, R.id.widget_title, R.id.widget_title_img, event.name, 20f, actualTextColor, customTypeface, context)
             
             if (isPast) {
                 val pastDays = days.absoluteValue
@@ -110,36 +117,41 @@ class CountdownWidgetProvider : AppWidgetProvider() {
                 val pastMinutes = minutes.absoluteValue
                 
                 val ago = context.getString(R.string.ago_suffix)
-                views.setTextViewText(R.id.widget_days, if (pastDays > 0) pastDays.toString() else (if (pastHours > 0) pastHours.toString() else pastMinutes.toString()))
-                views.setTextViewText(R.id.widget_days_unit, if (pastDays > 0) context.getString(R.string.unit_days) + ago else (if (pastHours > 0) context.getString(R.string.unit_hours) + ago else context.getString(R.string.unit_minutes) + ago))
+                val daysValue = if (pastDays > 0) pastDays.toString() else (if (pastHours > 0) pastHours.toString() else pastMinutes.toString())
+                val daysUnit = if (pastDays > 0) context.getString(R.string.unit_days) + ago else (if (pastHours > 0) context.getString(R.string.unit_hours) + ago else context.getString(R.string.unit_minutes) + ago)
+                
+                setWidgetText(views, R.id.widget_days, R.id.widget_days_img, daysValue, 34f, secondaryTextColor, customTypeface, context)
+                setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, daysUnit, 16f, secondaryTextColor, customTypeface, context)
                 views.setViewVisibility(R.id.widget_time, View.GONE)
+                views.setViewVisibility(R.id.widget_time_img, View.GONE)
             } else {
                 if (days > 0) {
-                    views.setTextViewText(R.id.widget_days, days.toString())
-                    views.setTextViewText(R.id.widget_days_unit, context.getString(R.string.unit_days))
+                    setWidgetText(views, R.id.widget_days, R.id.widget_days_img, days.toString(), 34f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, context.getString(R.string.unit_days), 16f, secondaryTextColor, customTypeface, context)
                     views.setViewVisibility(R.id.widget_time, View.GONE)
+                    views.setViewVisibility(R.id.widget_time_img, View.GONE)
                 } else if (hours > 0) {
-                    views.setTextViewText(R.id.widget_days, hours.toString())
-                    views.setTextViewText(R.id.widget_days_unit, context.getString(R.string.unit_hours))
+                    setWidgetText(views, R.id.widget_days, R.id.widget_days_img, hours.toString(), 34f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, context.getString(R.string.unit_hours), 16f, secondaryTextColor, customTypeface, context)
                     views.setViewVisibility(R.id.widget_time, View.GONE)
+                    views.setViewVisibility(R.id.widget_time_img, View.GONE)
                 } else {
-                    views.setTextViewText(R.id.widget_days, minutes.toString())
-                    views.setTextViewText(R.id.widget_days_unit, context.getString(R.string.unit_minutes))
+                    setWidgetText(views, R.id.widget_days, R.id.widget_days_img, minutes.toString(), 34f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, context.getString(R.string.unit_minutes), 16f, secondaryTextColor, customTypeface, context)
                     views.setViewVisibility(R.id.widget_time, View.GONE)
+                    views.setViewVisibility(R.id.widget_time_img, View.GONE)
                 }
             }
         } else {
             views.setViewVisibility(R.id.widget_background_image, View.GONE)
             views.setViewVisibility(R.id.widget_background_overlay, View.GONE)
-            views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_no_activity))
-            views.setTextViewText(R.id.widget_days, context.getString(R.string.widget_click_create))
-            views.setTextViewText(R.id.widget_days_unit, "")
-            views.setTextViewText(R.id.widget_time, "")
-            views.setTextViewText(R.id.widget_target_label, "")
-            views.setInt(R.id.widget_layout_root, "setBackgroundColor", android.graphics.Color.DKGRAY)
-            views.setTextColor(R.id.widget_title, android.graphics.Color.WHITE)
-            views.setTextColor(R.id.widget_days, android.graphics.Color.WHITE)
-            views.setInt(R.id.widget_edit_btn, "setColorFilter", android.graphics.Color.WHITE)
+            setWidgetText(views, R.id.widget_title, R.id.widget_title_img, context.getString(R.string.widget_no_activity), 20f, Color.WHITE, null, context)
+            setWidgetText(views, R.id.widget_days, R.id.widget_days_img, context.getString(R.string.widget_click_create), 34f, Color.WHITE, null, context)
+            setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, "", 16f, Color.WHITE, null, context)
+            setWidgetText(views, R.id.widget_time, R.id.widget_time_img, "", 13f, Color.WHITE, null, context)
+            setWidgetText(views, R.id.widget_target_label, 0, "", 12f, Color.WHITE, null, context)
+            views.setInt(R.id.widget_layout_root, "setBackgroundColor", Color.DKGRAY)
+            views.setInt(R.id.widget_edit_btn, "setColorFilter", Color.WHITE)
 
             val createIntent = Intent(context, MainActivity::class.java)
             createIntent.action = "com.Zero23.countdown.ACTION_CREATE_EVENT"
@@ -170,14 +182,44 @@ class CountdownWidgetProvider : AppWidgetProvider() {
     private fun applyBaseStyle(views: RemoteViews, event: CountdownEvent) {
         val colorHex = event.colorHex ?: "#FF4500" // Default color
         views.setInt(R.id.widget_layout_root, "setBackgroundColor", colorHex.toColorInt())
-        views.setTextColor(R.id.widget_title, android.graphics.Color.WHITE)
-        views.setTextColor(R.id.widget_days, "#99000000".toColorInt())
-        views.setTextColor(R.id.widget_days_unit, "#99000000".toColorInt())
-        views.setTextColor(R.id.widget_time, "#99000000".toColorInt())
-        views.setInt(R.id.widget_edit_btn, "setColorFilter", android.graphics.Color.WHITE)
+        views.setInt(R.id.widget_edit_btn, "setColorFilter", Color.WHITE)
     }
 
-    private fun decodeSampledBitmapFromUri(context: Context, uri: Uri, reqWidth: Int = 400, reqHeight: Int = 400): Bitmap? {
+    private fun setWidgetText(views: RemoteViews, viewId: Int, imgViewId: Int, text: String, fontSizeSp: Float, color: Int, typeface: Typeface?, context: Context) {
+        if (typeface != null) {
+            views.setViewVisibility(viewId, View.GONE)
+            if (imgViewId != 0) {
+                views.setViewVisibility(imgViewId, View.VISIBLE)
+                val bitmap = createTextBitmap(text, fontSizeSp, color, typeface, context)
+                views.setImageViewBitmap(imgViewId, bitmap)
+            }
+        } else {
+            views.setViewVisibility(viewId, View.VISIBLE)
+            if (imgViewId != 0) views.setViewVisibility(imgViewId, View.GONE)
+            views.setTextViewText(viewId, text)
+            views.setTextColor(viewId, color)
+        }
+    }
+
+    private fun createTextBitmap(text: String, fontSizeSp: Float, color: Int, typeface: Typeface, context: Context): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            this.color = color
+            this.textSize = fontSizeSp * density
+        }
+        val fontMetrics = paint.fontMetrics
+        val width = paint.measureText(text).toInt().coerceAtLeast(1)
+        val height = (fontMetrics.bottom - fontMetrics.top).toInt().coerceAtLeast(1)
+        
+        val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawText(text, 0f, -fontMetrics.top, paint)
+        return bitmap
+    }
+
+    @Suppress("SameParameterValue")
+    private fun decodeSampledBitmapFromUri(context: Context, uri: Uri, reqWidth: Int, reqHeight: Int): Bitmap? {
         return try {
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }

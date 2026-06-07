@@ -1,5 +1,6 @@
 package com.Zero23.countdown.ui
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,10 +22,16 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import com.Zero23.countdown.R
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ColorPickerDialog(
     initialColorHex: String?,
     showFollowSystem: Boolean = false,
+    showFollowBackground: Boolean = false,
+    isBackgroundSet: Boolean = false,
+    savedColors: List<String> = emptyList(),
+    onDeleteSavedColor: (String) -> Unit = {},
+    onSaveColor: (String) -> Unit = {},
     onDismiss: () -> Unit,
     onColorSelected: (String?) -> Unit
 ) {
@@ -79,6 +86,30 @@ fun ColorPickerDialog(
                     }
                 }
 
+                if (savedColors.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(stringResource(R.string.saved_colors), style = MaterialTheme.typography.labelLarge)
+                    LazyVerticalGrid(columns = GridCells.Fixed(5), modifier = Modifier.heightIn(max = 95.dp)) {
+                        items(savedColors) { color ->
+                            Box(modifier = Modifier
+                                .padding(4.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(color.toColorInt()))
+                                .combinedClickable(
+                                    onClick = {
+                                        hexInput = color.replace("#", "")
+                                        updateFromHex()
+                                    },
+                                    onLongClick = {
+                                        onDeleteSavedColor(color)
+                                    }
+                                )
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.clover_pre), style = MaterialTheme.typography.labelLarge)
                 val specialPresets = listOf("#88dd44", "#ffccaa", "#99ccff", "#ffaacc", "#99eedd")
@@ -124,21 +155,34 @@ fun ColorPickerDialog(
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (showFollowSystem) Arrangement.SpaceBetween else Arrangement.End) {
-                    if (showFollowSystem) {
-                        TextButton(onClick = {
-                            onColorSelected(null)
-                            onDismiss()
-                        }) { Text(stringResource(R.string.theme_follow_system)) }
-                    }
-                    
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Row {
-                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-                        TextButton(onClick = {
-                            onColorSelected("#$hexInput")
-                            onDismiss()
-                        }) { Text(stringResource(R.string.confirm)) }
+                        if (showFollowSystem) {
+                            TextButton(onClick = {
+                                onColorSelected(null)
+                                onDismiss()
+                            }) { Text(stringResource(R.string.theme_follow_system)) }
+                        }
+                        if (showFollowBackground) {
+                            TextButton(
+                                onClick = {
+                                    onColorSelected("FOLLOW_BG")
+                                    onDismiss()
+                                },
+                                enabled = isBackgroundSet
+                            ) { Text(stringResource(R.string.follow_bg)) }
+                        }
                     }
+                }
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+                    TextButton(onClick = {
+                        val finalHex = "#$hexInput"
+                        onSaveColor(finalHex)
+                        onColorSelected(finalHex)
+                        onDismiss()
+                    }) { Text(stringResource(R.string.confirm)) }
                 }
             }
         }
