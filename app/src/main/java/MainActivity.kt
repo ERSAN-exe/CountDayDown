@@ -1,5 +1,6 @@
 package com.Zero23.countdown
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import coil3.compose.AsyncImage
 
 import android.content.Context
@@ -1514,6 +1515,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
         )
     }
 
+    var largeCardRatio by remember { mutableFloatStateOf(0.5f) }
+
     // Re-check permission when resuming or returning from settings
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -1702,13 +1705,19 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     repeatUnit = null,
                     customFontPath = customFontPath
                 )
-                CountdownItem(
-                    event = previewEvent,
-                    onEdit = {},
-                    onDelete = {},
-                    showActions = false,
-                    now = previewNow
-                )
+                Box(modifier = Modifier.onGloballyPositioned { coords ->
+                    if (coords.size.width > 0) {
+                        largeCardRatio = coords.size.height.toFloat() / coords.size.width.toFloat()
+                    }
+                }) {
+                    CountdownItem(
+                        event = previewEvent,
+                        onEdit = {},
+                        onDelete = {},
+                        showActions = false,
+                        now = previewNow
+                    )
+                }
             }
 
             // Pager for swipeable settings (Starts below preview card)
@@ -2202,7 +2211,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     if (cropOriginalUri != null) {
         ImageCropOverlay(
             originalUri = cropOriginalUri!!,
-            initialRatio = 0.5f, // 2:1 ratio (Height / Width)
+            initialRatio = largeCardRatio,
             showRatioToggle = true,
             onCropDone = { uri, isSecondStep ->
                 if (!isSecondStep) {
@@ -2750,8 +2759,19 @@ fun ImageCropOverlay(
                 val layoutImgH = bitmapVal.height * fitScale
                 
                 val density = LocalDensity.current
-                val cropWidthPx = containerWidthPx - with(density) { 64.dp.toPx() }
-                val cropHeightPx = cropWidthPx * cropRatio
+                val horizontalMargin = with(density) { 64.dp.toPx() }
+                val verticalMargin = with(density) { 180.dp.toPx() } // Reserve space for top and bottom UI bars
+
+                val maxWidth = containerWidthPx - horizontalMargin
+                val maxHeight = containerHeightPx - verticalMargin
+
+                var cropWidthPx = maxWidth
+                var cropHeightPx = maxWidth * cropRatio
+
+                if (cropHeightPx > maxHeight) {
+                    cropHeightPx = maxHeight
+                    cropWidthPx = maxHeight / cropRatio
+                }
                 
                 val left = (containerWidthPx - cropWidthPx) / 2f
                 val top = (containerHeightPx - cropHeightPx) / 2f
@@ -2885,7 +2905,7 @@ fun ImageCropOverlay(
                             .height(38.dp)
                             .padding(3.dp)
                     ) {
-                        val isLeftSelected = cropRatio == 0.5f
+                        val isLeftSelected = cropRatio == initialRatio
                         val alignment = if (isLeftSelected) Alignment.CenterStart else Alignment.CenterEnd
                         Box(
                             modifier = Modifier
@@ -2930,11 +2950,22 @@ fun ImageCropOverlay(
                         scope.launch(Dispatchers.IO) {
                             try {
                                 val fitScale = kotlin.math.min(containerWidthState / bitmapVal.width, containerHeightState / bitmapVal.height)
-                                val cropWidthPx = containerWidthState - 64 * currentDensity
-                                val cropHeightPx = cropWidthPx * cropRatio
+                                val horizontalMargin = 64 * currentDensity
+                                val verticalMargin = 180 * currentDensity
+                                val maxWidth = containerWidthState - horizontalMargin
+                                val maxHeight = containerHeightState - verticalMargin
+
+                                var cropWidthPx = maxWidth
+                                var cropHeightPx = maxWidth * cropRatio
+
+                                if (cropHeightPx > maxHeight) {
+                                    cropHeightPx = maxHeight
+                                    cropWidthPx = maxHeight / cropRatio
+                                }
+
                                 val left = (containerWidthState - cropWidthPx) / 2f
                                 val top = (containerHeightState - cropHeightPx) / 2f
-                                val targetW = if (cropRatio == 0.5f) 1200 else 800
+                                val targetW = if (!showRatioToggle || cropRatio == initialRatio) 1200 else 800
                                 val targetH = (targetW * cropRatio).toInt()
                                 val outScale = targetW.toFloat() / cropWidthPx
                                 val croppedBitmap = createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
