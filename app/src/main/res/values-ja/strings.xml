@@ -2,12 +2,12 @@
     <string name="app_name">CountDayDown</string>
     <string name="settings">設定</string>
     <string name="appearance">外観</string>
-    <string name="page_appearance">ページの外観</string>
+    <string name="page_appearance">テーマ</string>
     <string name="theme_follow_system">システムに従う</string>
     <string name="theme_light">ライト</string>
     <string name="theme_dark">ダーク</string>
     <string name="notifications">通知</string>
-    <string name="global_notification_switch">通知を有効にする</string>
+    <string name="global_notification_switch">通知</string>
     <string name="notification_switch_desc">無効にするとリマインダーは送信されません</string>
     <string name="language">言語</string>
     <string name="lang_follow_system">システムに従う</string>
@@ -16,7 +16,7 @@
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
     <string name="create_new">新規作成</string>
-    <string name="edit_event">編集</string>
+    <string name="edit_event">カウントダウンカードを編集</string>
     <string name="save">保存</string>
     <string name="item_name">項目名</string>
     <string name="reminder_settings">リマインダー設定</string>
@@ -53,7 +53,7 @@
     <string name="changelog">更新履歴</string>
     <string name="changelog_full_title">更新履歴 (中国語のみ)</string>
     <string name="syncing">同期中&#8230;</string>
-    <string name="current_time">現在: </string>
+    <string name="current_time" />
     <string name="target">ターゲット: </string>
     <string name="reminder_enabled">リマインダー有効</string>
     <string name="repeat_enabled">繰り返し有効</string>
@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.2</string>
+    <string name="version_text">バージョン v1.2.1</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
     <string name="event_name">イベント名</string>
@@ -97,7 +97,7 @@
     <string name="sort_by_creation">作成日でソート</string>
     <string name="timezone">タイムゾーン</string>
     <string name="network_time">ネットワーク時間</string>
-    <string name="app_theme_color">アプリのテーマカラー</string>
+    <string name="app_theme_color">テーマカラー</string>
     <string name="choose_theme_color">色を選択</string>
     <string name="clover_pre">More More Jump!</string>
     <string name="widget_no_activity">活動なし</string>
@@ -116,7 +116,7 @@
     <string name="import_success">インポートに成功しました</string>
     <string name="notif_format">「%1$s」%2$s</string>
     <string name="about">詳細</string>
-    <string name="feedback_email">フィードバックメール</string>
+    <string name="feedback_email">フィードバック</string>
     <string name="crop_title">写真を切り取る</string>
     <string name="custom_font">カスタムフォント</string>
     <string name="saved_colors">最近使用した色</string>

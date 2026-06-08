@@ -2,12 +2,12 @@
     <string name="app_name">카운트다운</string>
     <string name="settings">설정</string>
     <string name="appearance">외관</string>
-    <string name="page_appearance">페이지 외관</string>
+    <string name="page_appearance">테마</string>
     <string name="theme_follow_system">시스템 설정 따르기</string>
     <string name="theme_light">라이트 모드</string>
     <string name="theme_dark">다크 모드</string>
     <string name="notifications">알림</string>
-    <string name="global_notification_switch">전체 알림 설정</string>
+    <string name="global_notification_switch">알림</string>
     <string name="notification_switch_desc">비활성화하면 알림이 전송되지 않습니다</string>
     <string name="language">언어</string>
     <string name="lang_follow_system">시스템 설정 따르기</string>
@@ -16,7 +16,7 @@
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
     <string name="create_new">이벤트 생성</string>
-    <string name="edit_event">이벤트 편집</string>
+    <string name="edit_event">디데이 카드 편집</string>
     <string name="save">저장</string>
     <string name="item_name">항목 이름</string>
     <string name="reminder_settings">알림 설정</string>
@@ -53,7 +53,7 @@
     <string name="changelog">업데이트 기록</string>
     <string name="changelog_full_title">업데이트 기록 (중국어만 제공)</string>
     <string name="syncing">동기화 중&#8230;</string>
-    <string name="current_time">현재: </string>
+    <string name="current_time" />
     <string name="target">대상: </string>
     <string name="reminder_enabled">알림 활성화</string>
     <string name="repeat_enabled">반복 활성화</string>
@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB 편집</string>
     <string name="hex_edit">HEX 편집</string>
     <string name="past">경과</string>
-    <string name="version_text">버전 v1.2</string>
+    <string name="version_text">버전 v1.2.1</string>
     <string name="create_card">새 카드 생성</string>
     <string name="edit_card">편집</string>
     <string name="event_name">이벤트 이름</string>
@@ -97,7 +97,7 @@
     <string name="sort_by_creation">생성일 순 정렬</string>
     <string name="timezone">시간대</string>
     <string name="network_time">네트워크 시간</string>
-    <string name="app_theme_color">앱 테마 색상 변경</string>
+    <string name="app_theme_color">테마 색상</string>
     <string name="choose_theme_color">색상 선택</string>
     <string name="clover_pre">More More Jump!</string>
     <string name="widget_no_activity">현재 활동 없음</string>
@@ -116,7 +116,7 @@
     <string name="import_success">가져오기 성공</string>
     <string name="notif_format">\"%1$s\" %2$s</string>
     <string name="about">정보</string>
-    <string name="feedback_email">피드백 이메일</string>
+    <string name="feedback_email">피드백</string>
     <string name="crop_title">사진 자르기</string>
     <string name="custom_font">사용자 정의 글꼴</string>
     <string name="saved_colors">최근 사용한 색상</string>

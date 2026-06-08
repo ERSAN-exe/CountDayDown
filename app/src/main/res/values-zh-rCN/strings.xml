@@ -7,7 +7,7 @@
     <string name="theme_light">亮色</string>
     <string name="theme_dark">暗色</string>
     <string name="notifications">通知</string>
-    <string name="global_notification_switch">允许通知</string>
+    <string name="global_notification_switch">通知</string>
     <string name="notification_switch_desc">禁用后将不会收到任何提醒</string>
     <string name="language">语言</string>
     <string name="lang_follow_system">跟随系统</string>
@@ -16,7 +16,7 @@
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
     <string name="create_new">创建新事件</string>
-    <string name="edit_event">编辑事件</string>
+    <string name="edit_event">编辑倒数日卡片</string>
     <string name="save">保存</string>
     <string name="item_name">项目名称</string>
     <string name="reminder_settings">提醒设置</string>
@@ -53,7 +53,7 @@
     <string name="changelog">更新日志</string>
     <string name="changelog_full_title">更新日志 (仅中文)</string>
     <string name="syncing">同步时间中&#8230;</string>
-    <string name="current_time">当前: </string>
+    <string name="current_time" />
     <string name="target">目标: </string>
     <string name="reminder_enabled">提醒已开启</string>
     <string name="repeat_enabled">循环已开启</string>
@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB 调色</string>
     <string name="hex_edit">HEX 调色</string>
     <string name="past">已过去</string>
-    <string name="version_text">版本v1.2</string>
+    <string name="version_text">版本v1.2.1</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>
@@ -116,7 +116,7 @@
     <string name="import_success">导入成功</string>
     <string name="notif_format">“%1$s”%2$s</string>
     <string name="about">关于</string>
-    <string name="feedback_email">反馈邮箱</string>
+    <string name="feedback_email">反馈</string>
     <string name="crop_title">裁剪照片</string>
     <string name="custom_font">自定义字体</string>
     <string name="saved_colors">最近使用的颜色</string>

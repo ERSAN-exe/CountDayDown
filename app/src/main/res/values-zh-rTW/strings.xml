@@ -7,7 +7,7 @@
     <string name="theme_light">亮色</string>
     <string name="theme_dark">暗色</string>
     <string name="notifications">通知</string>
-    <string name="global_notification_switch">允許通知</string>
+    <string name="global_notification_switch">通知</string>
     <string name="notification_switch_desc">禁用後將不會收到任何提醒</string>
     <string name="language">語言</string>
     <string name="lang_follow_system">跟隨系統</string>
@@ -16,7 +16,7 @@
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
     <string name="create_new">創建新事件</string>
-    <string name="edit_event">編輯事件</string>
+    <string name="edit_event">編輯倒數日卡片</string>
     <string name="save">保存</string>
     <string name="item_name">項目名稱</string>
     <string name="reminder_settings">提醒設置</string>
@@ -53,7 +53,7 @@
     <string name="changelog">更新日誌</string>
     <string name="changelog_full_title">更新日誌 (僅中文)</string>
     <string name="syncing">同步時間中&#8230;</string>
-    <string name="current_time">當前: </string>
+    <string name="current_time" />
     <string name="target">目標: </string>
     <string name="reminder_enabled">提醒已開啟</string>
     <string name="repeat_enabled">循環已開啟</string>
@@ -116,7 +116,7 @@
     <string name="import_success">導入成功</string>
     <string name="notif_format">“%1$s”%2$s</string>
     <string name="about">關於</string>
-    <string name="feedback_email">反饋郵箱</string>
+    <string name="feedback_email">反饋</string>
     <string name="crop_title">裁剪照片</string>
     <string name="custom_font">自定義字體</string>
     <string name="saved_colors">最近使用的顏色</string>
