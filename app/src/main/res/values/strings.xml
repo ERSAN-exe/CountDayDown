@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB Edit</string>
     <string name="hex_edit">HEX Edit</string>
     <string name="past">Past</string>
-    <string name="version_text">Version v1.2.1</string>
+    <string name="version_text">Version v1.2.2</string>
     <string name="create_card">Create New Card</string>
     <string name="edit_card">Edit</string>
     <string name="event_name">Event Name</string>
@@ -106,7 +106,7 @@
     <string name="background_image">Background Image</string>
     <string name="image_selected">Selected</string>
     <string name="background_brightness">Background Brightness</string>
-    <string name="choose_event_title">Select Countdown Card</string>
+    <string name="choose_event_title">Select Card for Widget</string>
     <string name="target_date_label">Target Date</string>
     <string name="date_time">Date &amp; Time</string>
     <string name="image_color">Image &amp; Color</string>
@@ -122,4 +122,5 @@
     <string name="saved_colors">Recent Colors</string>
     <string name="follow_bg">Follow Background</string>
     <string name="mask_intensity">Mask Intensity</string>
+    <string name="name_cannot_be_empty">Name cannot be empty</string>
 </resources>

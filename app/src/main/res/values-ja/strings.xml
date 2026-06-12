@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.2.1</string>
+    <string name="version_text">バージョン v1.2.2</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
     <string name="event_name">イベント名</string>
@@ -122,4 +122,5 @@
     <string name="saved_colors">最近使用した色</string>
     <string name="follow_bg">背景に合わせる</string>
     <string name="mask_intensity">マスクの強度</string>
+    <string name="name_cannot_be_empty">名前を空にすることはできません</string>
 </resources>

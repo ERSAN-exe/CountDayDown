@@ -75,7 +75,7 @@ class CountdownWidgetProvider : AppWidgetProvider() {
                         views.setViewVisibility(R.id.widget_background_image, View.VISIBLE)
                         
                         views.setViewVisibility(R.id.widget_background_overlay, View.VISIBLE)
-                        val alpha = (255 * (1f - event.backgroundBrightness)).toInt().coerceIn(0, 255)
+                        val alpha = (255 * event.backgroundBrightness).toInt().coerceIn(0, 255)
                         val maskColor = (alpha shl 24) or 0x00000000
                         views.setInt(R.id.widget_background_overlay, "setBackgroundColor", maskColor)
                         

@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB 편집</string>
     <string name="hex_edit">HEX 편집</string>
     <string name="past">경과</string>
-    <string name="version_text">버전 v1.2.1</string>
+    <string name="version_text">버전 v1.2.2</string>
     <string name="create_card">새 카드 생성</string>
     <string name="edit_card">편집</string>
     <string name="event_name">이벤트 이름</string>
@@ -122,4 +122,5 @@
     <string name="saved_colors">최근 사용한 색상</string>
     <string name="follow_bg">배경에 맞추기</string>
     <string name="mask_intensity">마스크 강도</string>
+    <string name="name_cannot_be_empty">이름은 비워 둘 수 없습니다</string>
 </resources>

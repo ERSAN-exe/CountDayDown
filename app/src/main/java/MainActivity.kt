@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
@@ -77,6 +78,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.ui.util.lerp
+import kotlin.math.absoluteValue
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.EnterTransition
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.palette.graphics.Palette
@@ -240,7 +247,28 @@ class MainActivity : ComponentActivity() {
                                 type = NavType.StringType
                                 nullable = true
                                 defaultValue = null
-                            })
+                            }),
+                            enterTransition = {
+                                slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                                    animationSpec = tween(450)
+                                ) + fadeIn(animationSpec = tween(450))
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                                    animationSpec = tween(450)
+                                ) + fadeOut(animationSpec = tween(450))
+                            },
+                            popEnterTransition = {
+                                EnterTransition.None
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                                    animationSpec = tween(450)
+                                ) + fadeOut(animationSpec = tween(450))
+                            }
                         ) { backStackEntry ->
                             val eventId = backStackEntry.arguments?.getString("eventId")
                             AddEditScreen(navController, dataManager, eventId)
@@ -1232,15 +1260,7 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                         Text(
                             text = stringResource(R.string.feedback_email),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "ZErO23_FeedBack@outlook.com",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -1379,6 +1399,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     }
 
     var name by remember(initialEvent) { mutableStateOf(initialEvent?.name ?: "") }
+    var nameError by remember { mutableStateOf(false) }
     var selectedDate by remember(initialEvent) { 
         mutableStateOf(
             if (initialEvent != null) LocalDate.parse(initialEvent.targetDateTime.split("T")[0])
@@ -1534,8 +1555,10 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 3 })
     val selectedTab = pagerState.currentPage
     val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
+    
+    val nameEmptyMsg = stringResource(R.string.name_cannot_be_empty)
 
-    val onSave = {
+    val onSave: () -> Unit = {
         if (name.isNotBlank()) {
             val newEvent = CountdownEvent(
                 id = initialEvent?.id ?: UUID.randomUUID().toString(),
@@ -1565,6 +1588,12 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
                     navController.popBackStack()
                 }
+            }
+        } else {
+            nameError = true
+            Toast.makeText(context, nameEmptyMsg, Toast.LENGTH_SHORT).show()
+            scope.launch {
+                pagerState.animateScrollToPage(0)
             }
         }
     }
@@ -1622,40 +1651,52 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Custom Navigation Pill (Optimized for spacing and sliding effect)
-                Row(
+                Box(
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(4.dp)
                 ) {
-                    val navItems = listOf(
-                        Icons.Default.DateRange to 0,
-                        Icons.Default.Image to 1,
-                        Icons.Default.Settings to 2
-                    )
-                    navItems.forEach { (icon, index) ->
-                        val isSelected = selectedTab == index
-                        Box(
-                            modifier = Modifier
-                                .size(width = 56.dp, height = 48.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(
-                                    if (isSelected) {
-                                        if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f)
-                                        else Color.White
-                                    } else Color.Transparent
-                                )
-                                .clickable { scope.launch { pagerState.animateScrollToPage(index) } },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = if (isSelected) {
-                                    if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.primary
-                                } else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
-                                modifier = Modifier.size(24.dp)
+                    // Sliding background
+                    Box(
+                        modifier = Modifier
+                            .offset {
+                                val pagerOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                                IntOffset(x = ((56.dp + 4.dp) * pagerOffset).roundToPx(), y = 0)
+                            }
+                            .size(width = 56.dp, height = 48.dp)
+                            .background(
+                                if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f)
+                                else Color.White,
+                                RoundedCornerShape(20.dp)
                             )
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val navItems = listOf(
+                            Icons.Default.DateRange to 0,
+                            Icons.Default.Image to 1,
+                            Icons.Default.Settings to 2
+                        )
+                        navItems.forEach { (icon, index) ->
+                            val isSelected = selectedTab == index
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 56.dp, height = 48.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .clickable { scope.launch { pagerState.animateScrollToPage(index) } },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) {
+                                        if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.primary
+                                    } else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1731,6 +1772,24 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .graphicsLayer {
+                            val pageOffset = (
+                                    (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                                    ).absoluteValue
+                            // Page swipe animations: scaling and alpha fading
+                            alpha = lerp(
+                                start = 0.5f,
+                                stop = 1f,
+                                fraction = 1f - pageOffset.coerceIn(0f, 1f)
+                            )
+                            val scale = lerp(
+                                start = 0.9f,
+                                stop = 1f,
+                                fraction = 1f - pageOffset.coerceIn(0f, 1f)
+                            )
+                            scaleX = scale
+                            scaleY = scale
+                        }
                         .verticalScroll(rememberScrollState())
                 ) {
                     // Internal content padding
@@ -1746,7 +1805,11 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     Spacer(modifier = Modifier.height(8.dp))
                                     OutlinedTextField(
                                         value = name,
-                                        onValueChange = { name = it },
+                                        onValueChange = { 
+                                            name = it 
+                                            if (it.isNotBlank()) nameError = false
+                                        },
+                                        isError = nameError,
                                         label = { Text(stringResource(R.string.event_name)) },
                                         modifier = Modifier.fillMaxWidth(),
                                         singleLine = true,
@@ -1754,7 +1817,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                         colors = OutlinedTextFieldDefaults.colors(
                                             focusedContainerColor = MaterialTheme.colorScheme.surface,
                                             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                            disabledContainerColor = MaterialTheme.colorScheme.surface
+                                            disabledContainerColor = MaterialTheme.colorScheme.surface,
+                                            errorContainerColor = MaterialTheme.colorScheme.surface
                                         )
                                     )
 
@@ -1881,25 +1945,31 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                         }
                                     }
 
-                                    if (backgroundImageUri != null) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                                .padding(horizontal = 24.dp, vertical = 12.dp)
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.background_brightness),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                            Slider(
-                                                value = backgroundBrightness,
-                                                onValueChange = { backgroundBrightness = it },
-                                                valueRange = 0f..1f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
+                                    AnimatedVisibility(
+                                        visible = backgroundImageUri != null,
+                                        enter = fadeIn() + expandVertically(),
+                                        exit = fadeOut() + shrinkVertically()
+                                    ) {
+                                        Column {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.background_brightness),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                                Slider(
+                                                    value = backgroundBrightness,
+                                                    onValueChange = { backgroundBrightness = it },
+                                                    valueRange = 0f..1f,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
                                         }
                                     }
 
@@ -2094,34 +2164,20 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                             }
                                         }
 
-                                        if (repeatType == "custom") {
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                OutlinedTextField(
-                                                    value = repeatInterval,
-                                                    onValueChange = { repeatInterval = it },
-                                                    label = { Text(stringResource(R.string.repeat_every)) },
-                                                    modifier = Modifier.weight(1f),
-                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                    shape = RoundedCornerShape(24.dp),
-                                                    colors = OutlinedTextFieldDefaults.colors(
-                                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                        disabledContainerColor = MaterialTheme.colorScheme.surface
-                                                    )
-                                                )
-                                                ExposedDropdownMenuBox(
-                                                    expanded = isRepeatUnitMenuExpanded,
-                                                    onExpandedChange = { isRepeatUnitMenuExpanded = it },
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
+                                        AnimatedVisibility(
+                                            visible = repeatType == "custom",
+                                            enter = fadeIn() + expandVertically(),
+                                            exit = fadeOut() + shrinkVertically()
+                                        ) {
+                                            Column {
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     OutlinedTextField(
-                                                        value = repeatUnits.find { it.first == repeatUnit }?.second ?: stringResource(R.string.unit_days),
-                                                        onValueChange = {},
-                                                        readOnly = true,
-                                                        label = { Text(stringResource(R.string.repeat_unit)) },
-                                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatUnitMenuExpanded) },
-                                                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                                        value = repeatInterval,
+                                                        onValueChange = { repeatInterval = it },
+                                                        label = { Text(stringResource(R.string.repeat_every)) },
+                                                        modifier = Modifier.weight(1f),
+                                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                                         shape = RoundedCornerShape(24.dp),
                                                         colors = OutlinedTextFieldDefaults.colors(
                                                             focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -2129,18 +2185,38 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                             disabledContainerColor = MaterialTheme.colorScheme.surface
                                                         )
                                                     )
-                                                    ExposedDropdownMenu(
+                                                    ExposedDropdownMenuBox(
                                                         expanded = isRepeatUnitMenuExpanded,
-                                                        onDismissRequest = { isRepeatUnitMenuExpanded = false }
+                                                        onExpandedChange = { isRepeatUnitMenuExpanded = it },
+                                                        modifier = Modifier.weight(1f)
                                                     ) {
-                                                        repeatUnits.forEach { unit ->
-                                                            DropdownMenuItem(
-                                                                text = { Text(unit.second) },
-                                                                onClick = {
-                                                                    repeatUnit = unit.first
-                                                                    isRepeatUnitMenuExpanded = false
-                                                                }
+                                                        OutlinedTextField(
+                                                            value = repeatUnits.find { it.first == repeatUnit }?.second ?: stringResource(R.string.unit_days),
+                                                            onValueChange = {},
+                                                            readOnly = true,
+                                                            label = { Text(stringResource(R.string.repeat_unit)) },
+                                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatUnitMenuExpanded) },
+                                                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                                            shape = RoundedCornerShape(24.dp),
+                                                            colors = OutlinedTextFieldDefaults.colors(
+                                                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                                disabledContainerColor = MaterialTheme.colorScheme.surface
                                                             )
+                                                        )
+                                                        ExposedDropdownMenu(
+                                                            expanded = isRepeatUnitMenuExpanded,
+                                                            onDismissRequest = { isRepeatUnitMenuExpanded = false }
+                                                        ) {
+                                                            repeatUnits.forEach { unit ->
+                                                                DropdownMenuItem(
+                                                                    text = { Text(unit.second) },
+                                                                    onClick = {
+                                                                        repeatUnit = unit.first
+                                                                        isRepeatUnitMenuExpanded = false
+                                                                    }
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2725,6 +2801,10 @@ fun ImageCropOverlay(
     var containerWidthState by remember { mutableFloatStateOf(0f) }
     var containerHeightState by remember { mutableFloatStateOf(0f) }
 
+    val density = LocalDensity.current
+    val horizontalMargin = with(density) { 64.dp.toPx() }
+    val verticalMargin = with(density) { 180.dp.toPx() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2735,13 +2815,7 @@ fun ImageCropOverlay(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer(clip = true)
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(0.5f, 5f)
-                            offset += pan
-                        }
-                    },
+                    .graphicsLayer(clip = true),
                 contentAlignment = Alignment.Center
             ) {
                 val containerWidthPx = constraints.maxWidth.toFloat()
@@ -2753,31 +2827,53 @@ fun ImageCropOverlay(
                 }
                 
                 val fitScale = remember(bitmapVal, containerWidthPx, containerHeightPx) {
-                    kotlin.math.min(containerWidthPx / bitmapVal.width, containerHeightPx / bitmapVal.height)
+                    if (containerWidthPx > 0 && containerHeightPx > 0) {
+                        kotlin.math.min(containerWidthPx / bitmapVal.width, containerHeightPx / bitmapVal.height)
+                    } else 0f
                 }
                 val layoutImgW = bitmapVal.width * fitScale
                 val layoutImgH = bitmapVal.height * fitScale
-                
-                val density = LocalDensity.current
-                val horizontalMargin = with(density) { 64.dp.toPx() }
-                val verticalMargin = with(density) { 180.dp.toPx() } // Reserve space for top and bottom UI bars
 
-                val maxWidth = containerWidthPx - horizontalMargin
-                val maxHeight = containerHeightPx - verticalMargin
+                val maxWidth = (containerWidthPx - horizontalMargin).coerceAtLeast(0f)
+                val maxHeight = (containerHeightPx - verticalMargin).coerceAtLeast(0f)
 
                 var cropWidthPx = maxWidth
                 var cropHeightPx = maxWidth * cropRatio
 
                 if (cropHeightPx > maxHeight) {
                     cropHeightPx = maxHeight
-                    cropWidthPx = maxHeight / cropRatio
+                    cropWidthPx = if (cropRatio > 0) maxHeight / cropRatio else 0f
+                }
+
+                val coverScale = remember(layoutImgW, layoutImgH, cropWidthPx, cropHeightPx) {
+                    if (layoutImgW > 0 && layoutImgH > 0) {
+                        kotlin.math.max(cropWidthPx / layoutImgW, cropHeightPx / layoutImgH)
+                    } else 1f
+                }
+
+                LaunchedEffect(coverScale) {
+                    if (!coverScale.isNaN() && scale < coverScale) scale = coverScale
                 }
                 
                 val left = (containerWidthPx - cropWidthPx) / 2f
                 val top = (containerHeightPx - cropHeightPx) / 2f
 
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(coverScale, cropWidthPx, cropHeightPx, layoutImgW, layoutImgH) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(coverScale, 5f)
+                                
+                                val maxOffsetX = (layoutImgW * scale - cropWidthPx) / 2f
+                                val maxOffsetY = (layoutImgH * scale - cropHeightPx) / 2f
+                                
+                                offset = Offset(
+                                    x = (offset.x + pan.x).coerceIn(-maxOffsetX.coerceAtLeast(0f), maxOffsetX.coerceAtLeast(0f)),
+                                    y = (offset.y + pan.y).coerceIn(-maxOffsetY.coerceAtLeast(0f), maxOffsetY.coerceAtLeast(0f))
+                                )
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
@@ -2801,12 +2897,6 @@ fun ImageCropOverlay(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                scale = (scale * zoom).coerceIn(0.5f, 5f)
-                                offset += pan
-                            }
-                        }
                         .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
                         .drawWithContent {
                             drawContent()
@@ -2884,11 +2974,40 @@ fun ImageCropOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Re-calculate coverScale for the slider range
+                val fitScale = if (cropBitmap != null && containerWidthState > 0 && containerHeightState > 0) {
+                    kotlin.math.min(containerWidthState / cropBitmap!!.width, containerHeightState / cropBitmap!!.height)
+                } else 1f
+                val layoutImgW = if (cropBitmap != null) cropBitmap!!.width * fitScale else 1f
+                val layoutImgH = if (cropBitmap != null) cropBitmap!!.height * fitScale else 1f
+                
+                val maxWidth = (containerWidthState - horizontalMargin).coerceAtLeast(1f)
+                val maxHeight = (containerHeightState - verticalMargin).coerceAtLeast(1f)
+                var cropWidthPx = maxWidth
+                var cropHeightPx = maxWidth * cropRatio
+                if (cropHeightPx > maxHeight) {
+                    cropHeightPx = maxHeight
+                    cropWidthPx = maxHeight / cropRatio
+                }
+                val coverScale = (if (layoutImgW > 0 && layoutImgH > 0) {
+                    kotlin.math.max(cropWidthPx / layoutImgW, cropHeightPx / layoutImgH)
+                } else 1f).coerceIn(0.1f, 5f)
+
                 Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                 Slider(
-                    value = scale,
-                    onValueChange = { scale = it },
-                    valueRange = 0.5f..5.0f,
+                    value = if (scale.isNaN()) coverScale else scale.coerceIn(coverScale, 5f),
+                    onValueChange = { 
+                        if (!it.isNaN()) {
+                            scale = it.coerceAtLeast(coverScale)
+                            val maxOffsetX = (layoutImgW * scale - cropWidthPx) / 2f
+                            val maxOffsetY = (layoutImgH * scale - cropHeightPx) / 2f
+                            offset = Offset(
+                                x = offset.x.coerceIn(-maxOffsetX.coerceAtLeast(0f), maxOffsetX.coerceAtLeast(0f)),
+                                y = offset.y.coerceIn(-maxOffsetY.coerceAtLeast(0f), maxOffsetY.coerceAtLeast(0f))
+                            )
+                        }
+                    },
+                    valueRange = coverScale..5f,
                     modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(
                         activeTrackColor = MaterialTheme.colorScheme.onPrimaryContainer,

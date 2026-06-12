@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB Edit</string>
     <string name="hex_edit">HEX Edit</string>
     <string name="past">Past</string>
-    <string name="version_text">Version v1.2.1</string>
+    <string name="version_text">Version v1.2.2</string>
     <string name="create_card">Create New Card</string>
     <string name="edit_card">Edit</string>
     <string name="event_name">Event Name</string>
@@ -122,4 +122,5 @@
     <string name="saved_colors">Recent Colors</string>
     <string name="follow_bg">Follow Background</string>
     <string name="mask_intensity">Mask Intensity</string>
+    <string name="name_cannot_be_empty">Name cannot be empty</string>
 </resources>
