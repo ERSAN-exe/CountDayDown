@@ -31,35 +31,75 @@ data class CountdownEvent(
     val widgetImageUri: String? = null,
     val backgroundBrightness: Float = 0.5f, // 0.0 to 1.0, 1.0 means no mask, 0.0 means black
     val createdAt: Long = System.currentTimeMillis(),
-    val customFontPath: String? = null
+    val customFontPath: String? = null,
+    val excludedDays: List<Int>? = null // 1: Monday, ..., 7: Sunday
 ) {
     fun calculateTarget(now: LocalDateTime): LocalDateTime {
         var target = LocalDateTime.parse(targetDateTime)
-        if (repeatType != null && repeatType != "none" && target.isBefore(now)) {
-            while (target.isBefore(now)) {
-                target = when (repeatType) {
-                    "daily" -> target.plusDays(1)
-                    "weekly" -> target.plusWeeks(1)
-                    "monthly" -> target.plusMonths(1)
-                    "yearly" -> target.plusYears(1)
-                    "custom" -> {
-                        val interval = repeatInterval?.toLong() ?: 1L
-                        when (repeatUnit) {
-                            "seconds" -> target.plusSeconds(interval)
-                            "minutes" -> target.plusMinutes(interval)
-                            "hours" -> target.plusHours(interval)
-                            "days" -> target.plusDays(interval)
-                            "weeks" -> target.plusWeeks(interval)
-                            "months" -> target.plusMonths(interval)
-                            "years" -> target.plusYears(interval)
-                            else -> target.plusDays(interval)
-                        }
+
+        // Helper to get the next date based on repeat settings
+        fun getNextOccurrence(current: LocalDateTime): LocalDateTime {
+            return when (repeatType) {
+                "daily" -> current.plusDays(1)
+                "weekly" -> current.plusWeeks(1)
+                "monthly" -> current.plusMonths(1)
+                "yearly" -> current.plusYears(1)
+                "custom" -> {
+                    val interval = repeatInterval?.toLong() ?: 1L
+                    when (repeatUnit) {
+                        "seconds" -> current.plusSeconds(interval)
+                        "minutes" -> current.plusMinutes(interval)
+                        "hours" -> current.plusHours(interval)
+                        "days" -> current.plusDays(interval)
+                        "weeks" -> current.plusWeeks(interval)
+                        "months" -> current.plusMonths(interval)
+                        "years" -> current.plusYears(interval)
+                        else -> current.plusDays(interval)
                     }
-                    else -> target
                 }
+                else -> current
             }
         }
+
+        if (repeatType != null && repeatType != "none") {
+            // Keep jumping by repeat interval until the date is in the future
+            while (target.isBefore(now)) {
+                val next = getNextOccurrence(target)
+                if (next == target) break 
+                target = next
+            }
+        }
+        // Excluded days logic removed from target calculation to keep target date consistent
         return target
+    }
+
+    fun countExcludedDaysBetween(start: LocalDateTime, end: LocalDateTime): Long {
+        if (excludedDays == null || excludedDays.isEmpty() || excludedDays.size >= 7) return 0
+        
+        var count = 0L
+        
+        // Use normalized start and end dates (ignoring time for pure day exclusion)
+        var current = if (start.isBefore(end)) start.toLocalDate() else end.toLocalDate()
+        val last = if (start.isBefore(end)) end.toLocalDate() else start.toLocalDate()
+        
+        // Rule: We only exclude days that have not yet passed.
+        // If 'current' is today (start), we only exclude it if the event is in the future.
+        // The while loop (current < last) correctly excludes all full days in between.
+        // It does NOT exclude the target day (last), ensuring the countdown works on that day.
+        
+        // However, if we start counting FROM tomorrow (current.plusDays(1)), 
+        // we avoid double-counting "today" which is already being handled by the partial time duration.
+        if (current.isBefore(last)) {
+            current = current.plusDays(1)
+        }
+
+        while (current.isBefore(last)) {
+            if (excludedDays.contains(current.dayOfWeek.value)) {
+                count++
+            }
+            current = current.plusDays(1)
+        }
+        return count
     }
 }
 
@@ -68,7 +108,10 @@ data class BackupData(
     val events: List<CountdownEvent>,
     val themeMode: Int,
     val themeColor: String?,
-    val notificationsEnabled: Boolean
+    val notificationsEnabled: Boolean,
+    val appBackgroundImage: String? = null,
+    val appBackgroundBrightness: Float = 0.5f,
+    val appBackgroundThemeColor: String? = null
 )
 
 class DataManager(private val context: Context) {
@@ -250,7 +293,10 @@ class DataManager(private val context: Context) {
         val mode = preferences[THEME_MODE_KEY] ?: 0
         val color: String? = preferences[THEME_COLOR_KEY]
         val notify = preferences[NOTIFICATIONS_ENABLED_KEY] ?: true
-        return BackupData(events, mode, color, notify)
+        val bgImage = preferences[APP_BACKGROUND_IMAGE_KEY]
+        val bgBrightness = preferences[APP_BACKGROUND_BRIGHTNESS_KEY] ?: 0.5f
+        val bgThemeColor = preferences[APP_BACKGROUND_THEME_COLOR_KEY]
+        return BackupData(events, mode, color, notify, bgImage, bgBrightness, bgThemeColor)
     }
 
     suspend fun restoreAllData(backup: BackupData) {
@@ -260,6 +306,14 @@ class DataManager(private val context: Context) {
             if (backup.themeColor == null) preferences.remove(THEME_COLOR_KEY)
             else preferences[THEME_COLOR_KEY] = backup.themeColor
             preferences[NOTIFICATIONS_ENABLED_KEY] = backup.notificationsEnabled
+            
+            if (backup.appBackgroundImage == null) preferences.remove(APP_BACKGROUND_IMAGE_KEY)
+            else preferences[APP_BACKGROUND_IMAGE_KEY] = backup.appBackgroundImage
+            
+            preferences[APP_BACKGROUND_BRIGHTNESS_KEY] = backup.appBackgroundBrightness
+            
+            if (backup.appBackgroundThemeColor == null) preferences.remove(APP_BACKGROUND_THEME_COLOR_KEY)
+            else preferences[APP_BACKGROUND_THEME_COLOR_KEY] = backup.appBackgroundThemeColor
         }
     }
 

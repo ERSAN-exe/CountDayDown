@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.2.2</string>
+    <string name="version_text">バージョン v1.3</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
     <string name="event_name">イベント名</string>
@@ -123,4 +123,16 @@
     <string name="follow_bg">背景に合わせる</string>
     <string name="mask_intensity">マスクの強度</string>
     <string name="name_cannot_be_empty">名前を空にすることはできません</string>
+    <string name="backup">バックアップ</string>
+    <string name="exclude_days">特定の日を除外</string>
+    <string name="mon">月</string>
+    <string name="tue">火</string>
+    <string name="wed">水</string>
+    <string name="thu">木</string>
+    <string name="fri">金</string>
+    <string name="sat">土</string>
+    <string name="sun">日</string>
+    <string name="cannot_exclude_all">すべての日は選択できません</string>
+    <string name="exclude_restriction">繰り返し設定や過去の日付とは併用できません</string>
+    <string name="select_image">画像を選択</string>
 </resources>

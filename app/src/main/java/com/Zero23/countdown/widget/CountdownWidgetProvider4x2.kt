@@ -27,8 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
-import kotlin.math.absoluteValue
 
 class CountdownWidgetProvider4x2 : AppWidgetProvider() {
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -101,11 +99,24 @@ class CountdownWidgetProvider4x2 : AppWidgetProvider() {
             val now = LocalDateTime.now()
             val target = event.calculateTarget(now)
 
-            val days = ChronoUnit.DAYS.between(now, target)
-            val hours = ChronoUnit.HOURS.between(now.plusDays(days), target)
-            val minutes = ChronoUnit.MINUTES.between(now.plusDays(days).plusHours(hours), target)
+            var duration = java.time.Duration.between(now, target)
 
-            val isPast = days < 0 || (days == 0L && hours < 0) || (days == 0L && hours == 0L && minutes < 0)
+            // Adjust duration by subtracting excluded days
+            if (!event.excludedDays.isNullOrEmpty()) {
+                val excludedCount = event.countExcludedDaysBetween(now, target)
+                duration = if (duration.isNegative) {
+                    duration.plus(java.time.Duration.ofDays(excludedCount))
+                } else {
+                    duration.minus(java.time.Duration.ofDays(excludedCount))
+                }
+            }
+
+            val absDuration = duration.abs()
+            val days = absDuration.toDays()
+            val hours = absDuration.toHours() % 24
+            val minutes = absDuration.toMinutes() % 60
+
+            val isPast = duration.isNegative
             
             val actualTextColor = if (event.backgroundImageUri != null) textColor else Color.WHITE
             val secondaryTextColor = if (event.backgroundImageUri != null) textColor else "#99000000".toColorInt()
@@ -115,13 +126,9 @@ class CountdownWidgetProvider4x2 : AppWidgetProvider() {
             setWidgetText(views, R.id.widget_target_label, R.id.widget_target_label_img, "${context.getString(R.string.target)}${target.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))}", 12f, labelColor, customTypeface, context)
 
             if (isPast) {
-                val pastDays = days.absoluteValue
-                val pastHours = hours.absoluteValue
-                val pastMinutes = minutes.absoluteValue
-
                 val ago = context.getString(R.string.ago_suffix)
-                val daysValue = if (pastDays > 0) pastDays.toString() else (if (pastHours > 0) pastHours.toString() else pastMinutes.toString())
-                val daysUnit = if (pastDays > 0) context.getString(R.string.unit_days) + ago else (if (pastHours > 0) context.getString(R.string.unit_hours) + ago else context.getString(R.string.unit_minutes) + ago)
+                val daysValue = if (days > 0) days.toString() else (if (hours > 0) hours.toString() else minutes.toString())
+                val daysUnit = if (days > 0) context.getString(R.string.unit_days) + ago else (if (hours > 0) context.getString(R.string.unit_hours) + ago else context.getString(R.string.unit_minutes) + ago)
 
                 setWidgetText(views, R.id.widget_days, R.id.widget_days_img, daysValue, 42f, secondaryTextColor, customTypeface, context)
                 setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, daysUnit, 22f, secondaryTextColor, customTypeface, context)

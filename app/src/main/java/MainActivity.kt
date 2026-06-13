@@ -27,6 +27,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -34,6 +35,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -161,9 +163,9 @@ class MainActivity : ComponentActivity() {
                 val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
                 val screenRatio = windowInfo.containerSize.height.toFloat() / windowInfo.containerSize.width.toFloat()
 
-                // Global Crop State
+                                // Global Crop State
                 var globalCropOriginalUri by remember { mutableStateOf<Uri?>(null) }
-                val bgPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                val bgPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
                     if (uri != null) globalCropOriginalUri = uri
                 }
 
@@ -236,7 +238,7 @@ class MainActivity : ComponentActivity() {
                             CountdownApp(navController, dataManager)
                         }
                         composable("settings") {
-                            SettingsScreen(navController, dataManager, onPickBg = { bgPickerLauncher.launch(arrayOf("image/*")) })
+                            SettingsScreen(navController, dataManager, onPickBg = { bgPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
                         }
                         composable("changelog") {
                             ChangelogScreen(navController, dataManager)
@@ -286,7 +288,7 @@ class MainActivity : ComponentActivity() {
                             globalCropOriginalUri = null
                         },
                         onDismiss = { globalCropOriginalUri = null },
-                        onReselect = { bgPickerLauncher.launch(arrayOf("image/*")) }
+                        onReselect = { bgPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                     )
                 }
             }
@@ -349,6 +351,22 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                     
                     context.contentResolver.openOutputStream(it)?.use { os ->
                         ZipOutputStream(os).use { zos ->
+                            // Export app background image
+                            var zipAppBgName: String? = null
+                            backup.appBackgroundImage?.let { uriStr ->
+                                if (!uriStr.startsWith("images/")) {
+                                    val entryName = "images/app_bg"
+                                    try {
+                                        resolver.openInputStream(uriStr.toUri())?.use { input ->
+                                            zos.putNextEntry(ZipEntry(entryName))
+                                            input.copyTo(zos)
+                                            zos.closeEntry()
+                                            zipAppBgName = entryName
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                            }
+
                             backup.events.forEach { event ->
                                 event.backgroundImageUri?.let { uriStr ->
                                     if (!uriStr.startsWith("images/")) {
@@ -395,6 +413,7 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                             }
                             
                             val backupForZip = backup.copy(
+                                appBackgroundImage = zipAppBgName ?: backup.appBackgroundImage,
                                 events = backup.events.map { event ->
                                     event.copy(
                                         backgroundImageUri = zipImages["${event.id}_bg"] ?: event.backgroundImageUri,
@@ -448,6 +467,15 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                                 val imagesDir = File(context.filesDir, "imported_images").apply { mkdirs() }
                                 val fontsDir = File(context.filesDir, "imported_fonts").apply { mkdirs() }
                                 
+                                var restoredAppBg = backup.appBackgroundImage
+                                if (restoredAppBg?.startsWith("images/") == true) {
+                                    imageFiles[restoredAppBg]?.let { data ->
+                                        val file = File(imagesDir, "app_bg")
+                                        file.writeBytes(data)
+                                        restoredAppBg = Uri.fromFile(file).toString()
+                                    }
+                                }
+
                                 val restoredEvents = backup.events.map { event ->
                                     var bgUri = event.backgroundImageUri
                                     var widgetUri = event.widgetImageUri
@@ -482,7 +510,10 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                                     )
                                 }
                                 
-                                dataManager.restoreAllData(backup.copy(events = restoredEvents))
+                                dataManager.restoreAllData(backup.copy(
+                                    events = restoredEvents,
+                                    appBackgroundImage = restoredAppBg
+                                ))
                                 withContext(Dispatchers.Main) {
                                     Toast.makeText(context, importSuccessMsg, Toast.LENGTH_SHORT).show()
                                 }
@@ -610,12 +641,14 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                                     importLauncher.launch(arrayOf("text/plain", "application/zip"))
                                 }
                             )
+                            val backupPrefix = stringResource(R.string.backup)
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.export_config)) },
                                 leadingIcon = { Icon(Icons.Default.FileUpload, null) },
                                 onClick = {
                                     isBackupMenuExpanded = false
-                                    exportLauncher.launch("countdown_backup.txt")
+                                    val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                                    exportLauncher.launch("${backupPrefix}_$time.zip")
                                 }
                             )
                         }
@@ -1454,7 +1487,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    var showColorPicker by remember { mutableStateOf(false) }
+        var showColorPicker by remember { mutableStateOf(false) }
     var backgroundImageUri by remember(initialEvent) { mutableStateOf(initialEvent?.backgroundImageUri) }
     var widgetImageUri by remember(initialEvent) { mutableStateOf(initialEvent?.widgetImageUri) }
     var backgroundBrightness by remember(initialEvent) { mutableFloatStateOf(initialEvent?.backgroundBrightness ?: 0.5f) }
@@ -1469,10 +1502,13 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
         })
     }
     
+    var isExcludeEnabled by remember(initialEvent) { mutableStateOf(initialEvent?.excludedDays?.isNotEmpty() == true) }
+    var selectedExcludedDays by remember(initialEvent) { mutableStateOf(initialEvent?.excludedDays ?: emptyList()) }
+    
     var cropOriginalUri by remember { mutableStateOf<Uri?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
+        contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri ->
             uri?.let {
                 backgroundImageUri = null // Reset for 2-step crop
@@ -1481,6 +1517,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
             }
         }
     )
+    
+
 
     val fontPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -1557,6 +1595,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
     
     val nameEmptyMsg = stringResource(R.string.name_cannot_be_empty)
+    val cannotExcludeAllMsg = stringResource(R.string.cannot_exclude_all)
 
     val onSave: () -> Unit = {
         if (name.isNotBlank()) {
@@ -1574,7 +1613,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 widgetImageUri = widgetImageUri,
                 backgroundBrightness = backgroundBrightness,
                 customFontPath = customFontPath,
-                createdAt = initialEvent?.createdAt ?: System.currentTimeMillis()
+                createdAt = initialEvent?.createdAt ?: System.currentTimeMillis(),
+                excludedDays = if (isExcludeEnabled && selectedExcludedDays.isNotEmpty()) selectedExcludedDays else null
             )
             scope.launch {
                 if (initialEvent != null) {
@@ -1739,16 +1779,17 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     widgetImageUri = widgetImageUri,
                     backgroundBrightness = backgroundBrightness,
                     createdAt = initialEvent?.createdAt ?: System.currentTimeMillis(),
-                    notificationContent = null,
-                    reminderMinutesBefore = null,
-                    repeatType = null,
-                    repeatInterval = null,
-                    repeatUnit = null,
-                    customFontPath = customFontPath
+                    notificationContent = notificationContent,
+                    reminderMinutesBefore = reminderMinutes,
+                    repeatType = repeatType,
+                    repeatInterval = repeatInterval.toIntOrNull(),
+                    repeatUnit = repeatUnit,
+                    customFontPath = customFontPath,
+                    excludedDays = if (isExcludeEnabled) selectedExcludedDays.ifEmpty { null } else null
                 )
-                Box(modifier = Modifier.onGloballyPositioned { coords ->
-                    if (coords.size.width > 0) {
-                        largeCardRatio = coords.size.height.toFloat() / coords.size.width.toFloat()
+                Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+                    if (coordinates.size.width > 0) {
+                        largeCardRatio = coordinates.size.height.toFloat() / coordinates.size.width.toFloat()
                     }
                 }) {
                     CountdownItem(
@@ -1858,6 +1899,104 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                             }
                                         }
                                     }
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    // Exclude Days Section
+                                    val isPast = LocalDateTime.of(selectedDate, selectedTime).isBefore(previewNow)
+                                    val isRepeatEnabled = repeatType != "none"
+                                    val isExcludeRestricted = isPast || isRepeatEnabled
+                                    
+                                    if (isExcludeRestricted && isExcludeEnabled) {
+                                        isExcludeEnabled = false
+                                    }
+
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                                            .alpha(if (isExcludeRestricted) 0.5f else 1f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = stringResource(R.string.exclude_days),
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                                if (isExcludeRestricted) {
+                                                    Text(
+                                                        text = stringResource(R.string.exclude_restriction),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                                    )
+                                                }
+                                            }
+                                            Switch(
+                                                checked = isExcludeEnabled,
+                                                onCheckedChange = { isExcludeEnabled = it },
+                                                enabled = !isExcludeRestricted
+                                            )
+                                        }
+
+                                        AnimatedVisibility(
+                                            visible = isExcludeEnabled,
+                                            enter = expandVertically() + fadeIn(),
+                                            exit = shrinkVertically() + fadeOut()
+                                        ) {
+                                            Column {
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    val days = listOf(
+                                                        1 to stringResource(R.string.mon),
+                                                        2 to stringResource(R.string.tue),
+                                                        3 to stringResource(R.string.wed),
+                                                        4 to stringResource(R.string.thu),
+                                                        5 to stringResource(R.string.fri),
+                                                        6 to stringResource(R.string.sat),
+                                                        7 to stringResource(R.string.sun)
+                                                    )
+                                                    days.forEach { (value, label) ->
+                                                        val isSelected = selectedExcludedDays.contains(value)
+                                                        Surface(
+                                                            onClick = {
+                                                                if (isSelected) {
+                                                                    selectedExcludedDays = selectedExcludedDays - value
+                                                                } else {
+                                                                    if (selectedExcludedDays.size < 6) {
+                                                                        selectedExcludedDays = (selectedExcludedDays + value).sorted()
+                                                                    } else {
+                                                                        Toast.makeText(context, cannotExcludeAllMsg, Toast.LENGTH_SHORT).show()
+                                                                    }
+                                                                }
+                                                            },
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .aspectRatio(1f),
+                                                            shape = CircleShape,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                                            border = if (!isSelected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)) else null
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Text(
+                                                                    text = label,
+                                                                    style = MaterialTheme.typography.bodySmall,
+                                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             1 -> {
@@ -1914,11 +2053,13 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                         )
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             if (backgroundImageUri != null) {
-                                                Text(
+                                                                                                    Text(
                                                     stringResource(R.string.image_selected),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.clickable { imagePickerLauncher.launch(arrayOf("image/*")) }
+                                                    modifier = Modifier.clickable {
+                                                        imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                    }
                                                 )
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 IconButton(
@@ -1932,7 +2073,9 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                 }
                                             } else {
                                                 IconButton(
-                                                    onClick = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                                                    onClick = {
+                                                        imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                    },
                                                     modifier = Modifier.size(40.dp)
                                                 ) {
                                                     Icon(
@@ -2062,23 +2205,6 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                             )
                                         }
 
-                                        OutlinedTextField(
-                                            value = notificationContent,
-                                            onValueChange = { notificationContent = it },
-                                            label = { Text(stringResource(R.string.reminder_content)) },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            placeholder = { Text(stringResource(R.string.placeholder_title)) },
-                                            enabled = isNotificationPartEnabled,
-                                            shape = RoundedCornerShape(24.dp),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                disabledContainerColor = MaterialTheme.colorScheme.surface
-                                            )
-                                        )
-
-                                        Spacer(modifier = Modifier.height(12.dp))
-
                                         ExposedDropdownMenuBox(
                                             expanded = isReminderMenuExpanded && isNotificationPartEnabled,
                                             onExpandedChange = { if (isNotificationPartEnabled) isReminderMenuExpanded = it },
@@ -2090,6 +2216,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                 readOnly = true,
                                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isReminderMenuExpanded) },
                                                 modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                                                label = { Text(stringResource(R.string.reminder_time)) },
                                                 enabled = isNotificationPartEnabled,
                                                 shape = RoundedCornerShape(24.dp),
                                                 colors = OutlinedTextFieldDefaults.colors(
@@ -2111,6 +2238,30 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                         }
                                                     )
                                                 }
+                                            }
+                                        }
+
+                                        AnimatedVisibility(
+                                            visible = reminderMinutes != -1,
+                                            enter = expandVertically() + fadeIn(),
+                                            exit = shrinkVertically() + fadeOut()
+                                        ) {
+                                            Column {
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                OutlinedTextField(
+                                                    value = notificationContent,
+                                                    onValueChange = { notificationContent = it },
+                                                    label = { Text(stringResource(R.string.reminder_content)) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    placeholder = { Text(stringResource(R.string.placeholder_title)) },
+                                                    enabled = isNotificationPartEnabled,
+                                                    shape = RoundedCornerShape(24.dp),
+                                                    colors = OutlinedTextFieldDefaults.colors(
+                                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                                        disabledContainerColor = MaterialTheme.colorScheme.surface
+                                                    )
+                                                )
                                             }
                                         }
                                     }
@@ -2300,10 +2451,15 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 }
             },
             onDismiss = { cropOriginalUri = null },
-            onReselect = { imagePickerLauncher.launch(arrayOf("image/*")) }
+            onReselect = {
+                imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }
         )
     }
 }
+
+
+
 
 
 @Composable
@@ -2335,7 +2491,18 @@ fun CountdownItem(
     // Calculate the next occurrence if it's a recurring event and passed
     val target = event.calculateTarget(now)
 
-    val duration = Duration.between(now, target)
+    var duration = Duration.between(now, target)
+    
+    // Adjust duration by subtracting excluded days
+    if (!event.excludedDays.isNullOrEmpty()) {
+        val excludedCount = event.countExcludedDaysBetween(now, target)
+        duration = if (duration.isNegative) {
+            duration.plus(Duration.ofDays(excludedCount))
+        } else {
+            duration.minus(Duration.ofDays(excludedCount))
+        }
+    }
+
     val isPast = duration.isNegative
     val absDuration = duration.abs()
 
@@ -2590,7 +2757,18 @@ fun SmallCountdownItem(
 
     val target = event.calculateTarget(now)
 
-    val duration = Duration.between(now, target)
+    var duration = Duration.between(now, target)
+
+    // Adjust duration by subtracting excluded days
+    if (!event.excludedDays.isNullOrEmpty()) {
+        val excludedCount = event.countExcludedDaysBetween(now, target)
+        duration = if (duration.isNegative) {
+            duration.plus(Duration.ofDays(excludedCount))
+        } else {
+            duration.minus(Duration.ofDays(excludedCount))
+        }
+    }
+
     val isPast = duration.isNegative
     val absDuration = duration.abs()
 

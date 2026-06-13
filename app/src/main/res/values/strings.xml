@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB Edit</string>
     <string name="hex_edit">HEX Edit</string>
     <string name="past">Past</string>
-    <string name="version_text">Version v1.2.2</string>
+    <string name="version_text">Version v1.3</string>
     <string name="create_card">Create New Card</string>
     <string name="edit_card">Edit</string>
     <string name="event_name">Event Name</string>
@@ -123,4 +123,16 @@
     <string name="follow_bg">Follow Background</string>
     <string name="mask_intensity">Mask Intensity</string>
     <string name="name_cannot_be_empty">Name cannot be empty</string>
+    <string name="backup">Backup</string>
+    <string name="exclude_days">Exclude Days</string>
+    <string name="mon">Mon</string>
+    <string name="tue">Tue</string>
+    <string name="wed">Wed</string>
+    <string name="thu">Thu</string>
+    <string name="fri">Fri</string>
+    <string name="sat">Sat</string>
+    <string name="sun">Sun</string>
+    <string name="cannot_exclude_all">Cannot select all days</string>
+    <string name="exclude_restriction">Cannot be used with repeating or count-up features</string>
+    <string name="select_image">Select Image</string>
 </resources>

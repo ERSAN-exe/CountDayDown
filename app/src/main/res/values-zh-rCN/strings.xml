@@ -68,7 +68,7 @@
     <string name="rgb_edit">RGB 调色</string>
     <string name="hex_edit">HEX 调色</string>
     <string name="past">已过去</string>
-    <string name="version_text">版本v1.2.2</string>
+    <string name="version_text">版本v1.3</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>
@@ -123,4 +123,16 @@
     <string name="follow_bg">跟随背景</string>
     <string name="mask_intensity">遮罩强度</string>
     <string name="name_cannot_be_empty">名称不能为空</string>
+    <string name="backup">备份</string>
+    <string name="exclude_days">排除某些天</string>
+    <string name="mon">一</string>
+    <string name="tue">二</string>
+    <string name="wed">三</string>
+    <string name="thu">四</string>
+    <string name="fri">五</string>
+    <string name="sat">六</string>
+    <string name="sun">日</string>
+    <string name="cannot_exclude_all">不能选择所有日期</string>
+    <string name="exclude_restriction">不能与循环/正数日功能一起使用</string>
+    <string name="select_image">选择图片</string>
 </resources>
