@@ -11,7 +11,7 @@
     <string name="notification_switch_desc">禁用後將不會收到任何提醒</string>
     <string name="language">語言</string>
     <string name="lang_follow_system">跟隨系統</string>
-    <string name="lang_zh">简体中文</string>
+    <string name="lang_zh">簡體中文</string>
     <string name="lang_zh_tw">繁體中文</string>
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
@@ -34,7 +34,7 @@
     <string name="repeat_mode">重複模式</string>
     <string name="repeat_none">不重複</string>
     <string name="repeat_daily">每天</string>
-    <string name="repeat_weekly">每周</string>
+    <string name="repeat_weekly">每週</string>
     <string name="repeat_monthly">每月</string>
     <string name="repeat_yearly">每年</string>
     <string name="repeat_custom">自定義</string>
@@ -44,7 +44,7 @@
     <string name="unit_minutes">分</string>
     <string name="unit_hours">時</string>
     <string name="unit_days">天</string>
-    <string name="unit_weeks">周</string>
+    <string name="unit_weeks">週</string>
     <string name="unit_months">月</string>
     <string name="unit_years">年</string>
     <string name="card_color">卡片顏色</string>
@@ -63,12 +63,17 @@
     <string name="delete">刪除</string>
     <string name="cancel">取消</string>
     <string name="confirm">確定</string>
+    <string name="preview">預覽</string>
+    <string name="palette">調色盤</string>
+    <string name="hex">HEX</string>
+    <string name="rgb">RGB</string>
     <string name="custom_color">自定義顏色</string>
     <string name="preset_color">預設顏色</string>
     <string name="rgb_edit">RGB 調色</string>
     <string name="hex_edit">HEX 調色</string>
     <string name="past">已過去</string>
-    <string name="version_text">版本 v1.3</string>
+    <string name="version_text">版本 v1.4</string>
+    <string name="saved_fonts">已添加的字體</string>
     <string name="create_card">創建新倒計時卡片</string>
     <string name="edit_card">編輯</string>
     <string name="event_name">事件名稱</string>
@@ -119,7 +124,7 @@
     <string name="feedback_email">反饋</string>
     <string name="crop_title">裁剪照片</string>
     <string name="custom_font">自定義字體</string>
-    <string name="saved_colors">最近使用的顏色</string>
+    <string name="saved_colors">最近使用的顏色 (長按刪除顏色)</string>
     <string name="follow_bg">跟隨背景</string>
     <string name="mask_intensity">遮罩強度</string>
     <string name="name_cannot_be_empty">名稱不能為空</string>
@@ -133,6 +138,6 @@
     <string name="sat">六</string>
     <string name="sun">日</string>
     <string name="cannot_exclude_all">不能選擇所有日期</string>
-    <string name="exclude_restriction">不能與循环/正数日功能一起使用</string>
+    <string name="exclude_restriction">不能與循環/正數日功能一起使用</string>
     <string name="select_image">選擇圖片</string>
 </resources>
