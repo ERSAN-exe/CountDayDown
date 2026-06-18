@@ -68,7 +68,8 @@
     <string name="rgb_edit">RGB 편집</string>
     <string name="hex_edit">HEX 편집</string>
     <string name="past">경과</string>
-    <string name="version_text">버전 v1.3</string>
+    <string name="version_text">버전 v1.4</string>
+    <string name="saved_fonts">추가된 글꼴</string>
     <string name="create_card">새 카드 생성</string>
     <string name="edit_card">편집</string>
     <string name="event_name">이벤트 이름</string>
@@ -119,7 +120,7 @@
     <string name="feedback_email">피드백</string>
     <string name="crop_title">사진 자르기</string>
     <string name="custom_font">사용자 정의 글꼴</string>
-    <string name="saved_colors">최근 사용한 색상</string>
+    <string name="saved_colors">최근 사용한 색상 (길게 눌러 삭제)</string>
     <string name="follow_bg">배경에 맞추기</string>
     <string name="mask_intensity">마스크 강도</string>
     <string name="name_cannot_be_empty">이름은 비워 둘 수 없습니다</string>

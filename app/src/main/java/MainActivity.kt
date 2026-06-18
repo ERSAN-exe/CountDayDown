@@ -27,7 +27,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -93,13 +92,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.Zero23.countdown.ui.ColorPickerDialog
+import com.Zero23.countdown.ui.ImagePickerScreen
 import com.Zero23.countdown.data.CountdownEvent
 import com.Zero23.countdown.data.DataManager
+import com.Zero23.countdown.data.SavedFont
 import com.Zero23.countdown.notifications.NotificationHelper
 import com.Zero23.countdown.ui.theme.CountDownTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -134,7 +135,7 @@ class MainActivity : ComponentActivity() {
             val dataManager = remember { DataManager(context) }
             val themeMode by dataManager.themeMode.collectAsState(initial = 0)
             val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
-            
+
             // Collect global background settings
             val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
             val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
@@ -165,9 +166,6 @@ class MainActivity : ComponentActivity() {
 
                                 // Global Crop State
                 var globalCropOriginalUri by remember { mutableStateOf<Uri?>(null) }
-                val bgPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-                    if (uri != null) globalCropOriginalUri = uri
-                }
 
                 Box(
                     modifier = Modifier
@@ -191,15 +189,20 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Request notification permission on start
-                    val launcher = rememberLauncherForActivityResult(
-                        contract = ActivityResultContracts.RequestPermission()
+                    // Request permissions on start
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestMultiplePermissions()
                     ) { }
 
                     LaunchedEffect(Unit) {
+                        val permissions = mutableListOf<String>()
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+                        } else {
+                            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
                         }
+                        permissionLauncher.launch(permissions.toTypedArray())
                         
                         if (intent?.action == "com.Zero23.countdown.ACTION_CREATE_EVENT") {
                             navController.navigate("add_edit")
@@ -238,7 +241,28 @@ class MainActivity : ComponentActivity() {
                             CountdownApp(navController, dataManager)
                         }
                         composable("settings") {
-                            SettingsScreen(navController, dataManager, onPickBg = { bgPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+                            val result = navController.currentBackStackEntry
+                                ?.savedStateHandle
+                                ?.getStateFlow<String?>("selected_image_uri", null)
+                                ?.collectAsState()
+                            
+                            LaunchedEffect(result?.value) {
+                                result?.value?.let { uriStr ->
+                                    globalCropOriginalUri = uriStr.toUri()
+                                    navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_image_uri")
+                                }
+                            }
+                            SettingsScreen(navController, dataManager, onPickBg = { navController.navigate("image_picker") })
+                        }
+                        composable("image_picker") {
+                            ImagePickerScreen(
+                                navController = navController,
+                                dataManager = dataManager,
+                                onImageSelected = { uri ->
+                                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_image_uri", uri.toString())
+                                    navController.popBackStack()
+                                }
+                            )
                         }
                         composable("changelog") {
                             ChangelogScreen(navController, dataManager)
@@ -275,6 +299,19 @@ class MainActivity : ComponentActivity() {
                             val eventId = backStackEntry.arguments?.getString("eventId")
                             AddEditScreen(navController, dataManager, eventId)
                         }
+                        composable(
+                            "color_picker?initialColor={initialColor}",
+                            arguments = listOf(
+                                navArgument("initialColor") { type = NavType.StringType; nullable = true; defaultValue = null }
+                            )
+                        ) { backStackEntry ->
+                            val initialColor = backStackEntry.arguments?.getString("initialColor")
+                            com.Zero23.countdown.ui.ColorPickerScreen(
+                                navController = navController,
+                                dataManager = dataManager,
+                                initialColorHex = initialColor
+                            )
+                        }
                     }
                 }
 
@@ -288,7 +325,7 @@ class MainActivity : ComponentActivity() {
                             globalCropOriginalUri = null
                         },
                         onDismiss = { globalCropOriginalUri = null },
-                        onReselect = { bgPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                        onReselect = { navController.navigate("image_picker") }
                     )
                 }
             }
@@ -870,11 +907,31 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            val id = eventToDelete?.id
-                            val newList = events.filter { it.id != id }
-                            scope.launch { 
-                                dataManager.saveEvents(newList)
-                                if (id != null) NotificationHelper.cancelNotification(context, id)
+                            eventToDelete?.let { event ->
+                                val id = event.id
+                                val newList = events.filter { it.id != id }
+                                scope.launch { 
+                                    dataManager.saveEvents(newList)
+                                    NotificationHelper.cancelNotification(context, id)
+                                    
+                                    // Delete associated image files
+                                    try {
+                                        event.backgroundImageUri?.let { uriStr ->
+                                            val uri = uriStr.toUri()
+                                            if (uri.scheme == "file") {
+                                                val file = File(uri.path ?: return@let)
+                                                if (file.exists()) file.delete()
+                                            }
+                                        }
+                                        event.widgetImageUri?.let { uriStr ->
+                                            val uri = uriStr.toUri()
+                                            if (uri.scheme == "file") {
+                                                val file = File(uri.path ?: return@let)
+                                                if (file.exists()) file.delete()
+                                            }
+                                        }
+                                    } catch (_: Exception) {}
+                                }
                             }
                             eventToDelete = null
                         },
@@ -900,14 +957,28 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
     val scope = rememberCoroutineScope()
     val themeMode by dataManager.themeMode.collectAsState(initial = 0)
     val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
-    val savedColors by dataManager.savedColors.collectAsState(initial = emptyList())
     val notificationsEnabled by dataManager.notificationsEnabled.collectAsState(initial = true)
-    
+
     val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
     val appBgThemeColor by dataManager.appBackgroundThemeColor.collectAsState(initial = null)
     val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
     
-    var showThemeColorPicker by remember { mutableStateOf(false) }
+    // Listen for color selection result
+    val colorResult = navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow<String?>("selected_color", null)
+        ?.collectAsState()
+
+    LaunchedEffect(colorResult?.value) {
+        colorResult?.value?.let { color ->
+            if (color == "FOLLOW_BG") {
+                dataManager.setThemeColor(appBgThemeColor)
+            } else {
+                dataManager.setThemeColor(color)
+            }
+            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_color")
+        }
+    }
 
     Scaffold(
         containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
@@ -1022,35 +1093,76 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Theme Color Card
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                        .clickable { showThemeColorPicker = true }
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(16.dp)
                 ) {
-                    Column {
-                        Text(stringResource(R.string.app_theme_color), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Text(
-                            text = when (themeColorHex) {
-                                null -> stringResource(R.string.theme_follow_system)
-                                appBgThemeColor -> if (appBgImage != null) stringResource(R.string.follow_bg) else "${stringResource(R.string.custom_color)} ($themeColorHex)"
-                                else -> "${stringResource(R.string.custom_color)} ($themeColorHex)"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    Text(stringResource(R.string.app_theme_color), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text(
+                        text = when (themeColorHex) {
+                            null -> stringResource(R.string.theme_follow_system)
+                            appBgThemeColor -> if (appBgImage != null) stringResource(R.string.follow_bg) else "${stringResource(R.string.custom_color)} ($themeColorHex)"
+                            else -> "${stringResource(R.string.custom_color)} ($themeColorHex)"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Follow System Button
+                        Surface(
+                            onClick = { scope.launch { dataManager.setThemeColor(null) } },
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = stringResource(R.string.theme_follow_system),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                        // Follow BG Button
+                        Surface(
+                            onClick = { scope.launch { dataManager.setThemeColor(appBgThemeColor) } },
+                            enabled = appBgImage != null,
+                            modifier = Modifier.weight(1f),
+                            color = if (appBgImage != null) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = stringResource(R.string.follow_bg),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (appBgImage != null) MaterialTheme.colorScheme.onSurface else Color.Gray.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                        // Color Picker Box
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .background(
+                                    themeColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { MaterialTheme.colorScheme.primary } } ?: MaterialTheme.colorScheme.primary,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable {
+                                    val encodedColor = themeColorHex?.let { Uri.encode(it) } ?: ""
+                                    navController.navigate("color_picker?initialColor=$encodedColor")
+                                }
                         )
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(
-                                themeColorHex?.let { Color(it.toColorInt()) } ?: MaterialTheme.colorScheme.primary,
-                                RoundedCornerShape(12.dp)
-                            )
-                    )
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1301,26 +1413,6 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                 Spacer(modifier = Modifier.height(48.dp))
             }
         }
-
-        if (showThemeColorPicker) {
-            ColorPickerDialog(
-                initialColorHex = themeColorHex,
-                showFollowSystem = true,
-                showFollowBackground = true,
-                isBackgroundSet = appBgImage != null,
-                savedColors = savedColors,
-                onDeleteSavedColor = { scope.launch { dataManager.removeSavedColor(it) } },
-                onSaveColor = { scope.launch { dataManager.addSavedColor(it) } },
-                onDismiss = { showThemeColorPicker = false },
-                onColorSelected = { 
-                    if (it == "FOLLOW_BG") {
-                        scope.launch { dataManager.setThemeColor(appBgThemeColor) }
-                    } else {
-                        scope.launch { dataManager.setThemeColor(it) }
-                    }
-                }
-            )
-        }
     }
 }
 
@@ -1424,34 +1516,24 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val events by dataManager.events.collectAsState(initial = emptyList())
-    val savedColors by dataManager.savedColors.collectAsState(initial = emptyList())
     val globalNotificationsEnabled by dataManager.notificationsEnabled.collectAsState(initial = true)
-    
+    val savedFonts by dataManager.savedFonts.collectAsState(initial = emptyList())
+
     val initialEvent = remember(eventId, events) {
         events.find { it.id == eventId }
     }
 
-    var name by remember(initialEvent) { mutableStateOf(initialEvent?.name ?: "") }
+    var name by remember(eventId) { mutableStateOf("") }
     var nameError by remember { mutableStateOf(false) }
-    var selectedDate by remember(initialEvent) { 
-        mutableStateOf(
-            if (initialEvent != null) LocalDate.parse(initialEvent.targetDateTime.split("T")[0])
-            else LocalDate.now().plusDays(1)
-        ) 
-    }
-    var selectedTime by remember(initialEvent) { 
-        mutableStateOf(
-            if (initialEvent != null) LocalTime.parse(initialEvent.targetDateTime.split("T")[1].substring(0, 5))
-            else LocalTime.of(0, 0)
-        )
-    }
-    var selectedColorHex by remember(initialEvent) { mutableStateOf(initialEvent?.colorHex) }
+    var selectedDate by remember(eventId) { mutableStateOf(LocalDate.now().plusDays(1)) }
+    var selectedTime by remember(eventId) { mutableStateOf(LocalTime.of(0, 0)) }
+    var selectedColorHex by remember(eventId) { mutableStateOf<String?>(null) }
     
-    var notificationContent by remember(initialEvent) { mutableStateOf(initialEvent?.notificationContent ?: "") }
-    var reminderMinutes by remember(initialEvent) { mutableIntStateOf(initialEvent?.reminderMinutesBefore ?: -1) }
-    var repeatType by remember(initialEvent) { mutableStateOf(initialEvent?.repeatType ?: "none") }
-    var repeatInterval by remember(initialEvent) { mutableStateOf(initialEvent?.repeatInterval?.toString() ?: "1") }
-    var repeatUnit by remember(initialEvent) { mutableStateOf(initialEvent?.repeatUnit ?: "days") }
+    var notificationContent by remember(eventId) { mutableStateOf("") }
+    var reminderMinutes by remember(eventId) { mutableIntStateOf(-1) }
+    var repeatType by remember(eventId) { mutableStateOf("none") }
+    var repeatInterval by remember(eventId) { mutableStateOf("1") }
+    var repeatUnit by remember(eventId) { mutableStateOf("days") }
     var isRepeatMenuExpanded by remember { mutableStateOf(false) }
     var isRepeatUnitMenuExpanded by remember { mutableStateOf(false) }
 
@@ -1487,38 +1569,82 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-        var showColorPicker by remember { mutableStateOf(false) }
-    var backgroundImageUri by remember(initialEvent) { mutableStateOf(initialEvent?.backgroundImageUri) }
-    var widgetImageUri by remember(initialEvent) { mutableStateOf(initialEvent?.widgetImageUri) }
-    var backgroundBrightness by remember(initialEvent) { mutableFloatStateOf(initialEvent?.backgroundBrightness ?: 0.5f) }
-    var customFontPath by remember(initialEvent) { mutableStateOf(initialEvent?.customFontPath) }
-    var customFontName by remember(initialEvent) { 
+    var backgroundImageUri by remember(eventId) { mutableStateOf(initialEvent?.backgroundImageUri) }
+    var widgetImageUri by remember(eventId) { mutableStateOf(initialEvent?.widgetImageUri) }
+    var backgroundBrightness by remember(eventId) { mutableFloatStateOf(initialEvent?.backgroundBrightness ?: 0.5f) }
+    var customFontPath by remember(eventId) { mutableStateOf(initialEvent?.customFontPath) }
+    var customFontName by remember(eventId) { 
         mutableStateOf(initialEvent?.customFontPath?.let { path ->
             val file = File(path)
             if (file.exists()) {
                 val originalNameFile = File(file.parent, file.name + ".name")
-                if (originalNameFile.exists()) try { originalNameFile.readText() } catch(_: Exception) { file.name } else file.name
+                val name = if (originalNameFile.exists()) try { originalNameFile.readText() } catch(_: Exception) { file.name } else file.name
+                name.removeSuffix(".ttf").removeSuffix(".TTF").removeSuffix(".otf").removeSuffix(".OTF")
             } else null
         })
     }
     
-    var isExcludeEnabled by remember(initialEvent) { mutableStateOf(initialEvent?.excludedDays?.isNotEmpty() == true) }
-    var selectedExcludedDays by remember(initialEvent) { mutableStateOf(initialEvent?.excludedDays ?: emptyList()) }
+    var isExcludeEnabled by remember(eventId) { mutableStateOf(initialEvent?.excludedDays?.isNotEmpty() == true) }
+    var selectedExcludedDays by remember(eventId) { mutableStateOf(initialEvent?.excludedDays ?: emptyList()) }
     
     var cropOriginalUri by remember { mutableStateOf<Uri?>(null) }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-        onResult = { uri ->
-            uri?.let {
-                backgroundImageUri = null // Reset for 2-step crop
-                widgetImageUri = null
-                cropOriginalUri = it
+    // Logic to populate fields when data is loaded from DataManager
+    var isInitialized by remember(eventId) { mutableStateOf(eventId == null) }
+    LaunchedEffect(initialEvent) {
+        if (initialEvent != null && !isInitialized) {
+            name = initialEvent.name
+            selectedDate = LocalDate.parse(initialEvent.targetDateTime.split("T")[0])
+            selectedTime = LocalTime.parse(initialEvent.targetDateTime.split("T")[1].substring(0, 5))
+            if (selectedColorHex == null) selectedColorHex = initialEvent.colorHex
+            notificationContent = initialEvent.notificationContent ?: ""
+            reminderMinutes = initialEvent.reminderMinutesBefore ?: -1
+            repeatType = initialEvent.repeatType ?: "none"
+            repeatInterval = initialEvent.repeatInterval?.toString() ?: "1"
+            repeatUnit = initialEvent.repeatUnit ?: "days"
+            if (backgroundImageUri == null) backgroundImageUri = initialEvent.backgroundImageUri
+            if (widgetImageUri == null) widgetImageUri = initialEvent.widgetImageUri
+            backgroundBrightness = initialEvent.backgroundBrightness
+            customFontPath = initialEvent.customFontPath
+            customFontName = initialEvent.customFontPath?.let { path ->
+                val file = File(path)
+                if (file.exists()) {
+                    val originalNameFile = File(file.parent, file.name + ".name")
+                    val name = if (originalNameFile.exists()) try { originalNameFile.readText() } catch(_: Exception) { file.name } else file.name
+                    name.removeSuffix(".ttf").removeSuffix(".TTF").removeSuffix(".otf").removeSuffix(".OTF")
+                } else null
             }
+            isExcludeEnabled = initialEvent.excludedDays?.isNotEmpty() == true
+            selectedExcludedDays = initialEvent.excludedDays ?: emptyList()
+            isInitialized = true
         }
-    )
-    
+    }
 
+    val pickerResult = navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow<String?>("selected_image_uri", null)
+        ?.collectAsState()
+    
+    LaunchedEffect(pickerResult?.value) {
+        pickerResult?.value?.let { uriStr ->
+            backgroundImageUri = null
+            widgetImageUri = null
+            cropOriginalUri = uriStr.toUri()
+            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_image_uri")
+        }
+    }
+
+    val colorResult = navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow<String?>("selected_color", null)
+        ?.collectAsState()
+
+    LaunchedEffect(colorResult?.value) {
+        colorResult?.value?.let { color ->
+            selectedColorHex = color
+            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_color")
+        }
+    }
 
     val fontPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -1541,20 +1667,24 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                 input.copyTo(output)
                             }
                             
-                            displayName?.let { name ->
-                                File(context.filesDir, "$fileName.name").writeText(name)
+                                displayName?.let { name ->
+                                    File(context.filesDir, "$fileName.name").writeText(name)
+                                }
+                                
+                                val cleanName = (displayName ?: file.name).removeSuffix(".ttf").removeSuffix(".TTF").removeSuffix(".otf").removeSuffix(".OTF")
+                                val savedFont = SavedFont(file.absolutePath, cleanName)
+                                dataManager.addSavedFont(savedFont)
+                                
+                                withContext(Dispatchers.Main) {
+                                    customFontPath = file.absolutePath
+                                    customFontName = cleanName
+                                }
                             }
-                            
-                            withContext(Dispatchers.Main) {
-                                customFontPath = file.absolutePath
-                                customFontName = displayName ?: file.name
-                            }
-                        }
-                    } catch (e: Exception) { e.printStackTrace() }
+                        } catch (e: Exception) { e.printStackTrace() }
+                    }
                 }
             }
-        }
-    )
+        )
     
     // Live preview tick
     var previewNow by remember { mutableStateOf(LocalDateTime.now().plusSeconds(globalTimeOffset)) }
@@ -1599,31 +1729,38 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
     val onSave: () -> Unit = {
         if (name.isNotBlank()) {
-            val newEvent = CountdownEvent(
-                id = initialEvent?.id ?: UUID.randomUUID().toString(),
-                name = name,
-                targetDateTime = LocalDateTime.of(selectedDate, selectedTime).toString(),
-                colorHex = selectedColorHex,
-                notificationContent = notificationContent.ifBlank { null },
-                reminderMinutesBefore = if (reminderMinutes == -1) null else reminderMinutes,
-                repeatType = repeatType,
-                repeatInterval = if (repeatType == "custom") repeatInterval.toIntOrNull() ?: 1 else null,
-                repeatUnit = if (repeatType == "custom") repeatUnit else null,
-                backgroundImageUri = backgroundImageUri,
-                widgetImageUri = widgetImageUri,
-                backgroundBrightness = backgroundBrightness,
-                customFontPath = customFontPath,
-                createdAt = initialEvent?.createdAt ?: System.currentTimeMillis(),
-                excludedDays = if (isExcludeEnabled && selectedExcludedDays.isNotEmpty()) selectedExcludedDays else null
-            )
             scope.launch {
-                if (initialEvent != null) {
-                    dataManager.saveEvents(events.map { if (it.id == newEvent.id) newEvent else it })
+                val currentEvents = dataManager.events.first()
+                val existingEvent = if (eventId != null) currentEvents.find { it.id == eventId } else null
+                
+                val finalEvent = CountdownEvent(
+                    id = eventId ?: UUID.randomUUID().toString(),
+                    name = name,
+                    targetDateTime = LocalDateTime.of(selectedDate, selectedTime).toString(),
+                    colorHex = selectedColorHex,
+                    notificationContent = notificationContent.ifBlank { null },
+                    reminderMinutesBefore = if (reminderMinutes == -1) null else reminderMinutes,
+                    repeatType = repeatType,
+                    repeatInterval = if (repeatType == "custom") repeatInterval.toIntOrNull() ?: 1 else null,
+                    repeatUnit = if (repeatType == "custom") repeatUnit else null,
+                    backgroundImageUri = backgroundImageUri,
+                    widgetImageUri = widgetImageUri,
+                    backgroundBrightness = backgroundBrightness,
+                    customFontPath = customFontPath,
+                    createdAt = existingEvent?.createdAt ?: System.currentTimeMillis(),
+                    excludedDays = if (isExcludeEnabled && selectedExcludedDays.isNotEmpty()) selectedExcludedDays else null
+                )
+
+                val updatedList = if (eventId != null) {
+                    currentEvents.map { if (it.id == eventId) finalEvent else it }
                 } else {
-                    dataManager.saveEvents(events + newEvent)
+                    currentEvents + finalEvent
                 }
+                
+                dataManager.saveEvents(updatedList)
+
                 if (globalNotificationsEnabled && hasNotificationPermission) {
-                    NotificationHelper.scheduleNotification(context, newEvent)
+                    NotificationHelper.scheduleNotification(context, finalEvent)
                 }
                 if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
                     navController.popBackStack()
@@ -2008,7 +2145,10 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                            .clickable { showColorPicker = true }
+                                            .clickable { 
+                                                val encodedColor = selectedColorHex?.let { Uri.encode(it) } ?: ""
+                                                navController.navigate("color_picker?initialColor=$encodedColor")
+                                            }
                                             .padding(horizontal = 24.dp, vertical = 16.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
@@ -2029,7 +2169,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                             modifier = Modifier
                                                 .size(40.dp)
                                                 .background(
-                                                    selectedColorHex?.let { Color(it.toColorInt()) } ?: MaterialTheme.colorScheme.primary,
+                                                    selectedColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { MaterialTheme.colorScheme.primary } } ?: MaterialTheme.colorScheme.primary,
                                                     CircleShape
                                                 )
                                         )
@@ -2058,12 +2198,28 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.clickable {
-                                                        imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                        navController.navigate("image_picker")
                                                     }
                                                 )
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 IconButton(
                                                     onClick = {
+                                                        try {
+                                                            backgroundImageUri?.let { uriStr ->
+                                                                val uri = uriStr.toUri()
+                                                                if (uri.scheme == "file") {
+                                                                    val file = File(uri.path ?: return@let)
+                                                                    if (file.exists()) file.delete()
+                                                                }
+                                                            }
+                                                            widgetImageUri?.let { uriStr ->
+                                                                val uri = uriStr.toUri()
+                                                                if (uri.scheme == "file") {
+                                                                    val file = File(uri.path ?: return@let)
+                                                                    if (file.exists()) file.delete()
+                                                                }
+                                                            }
+                                                        } catch (_: Exception) {}
                                                         backgroundImageUri = null
                                                         widgetImageUri = null
                                                     },
@@ -2074,7 +2230,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                             } else {
                                                 IconButton(
                                                     onClick = {
-                                                        imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                        navController.navigate("image_picker")
                                                     },
                                                     modifier = Modifier.size(40.dp)
                                                 ) {
@@ -2119,39 +2275,94 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     Spacer(modifier = Modifier.height(16.dp))
 
                                     // Custom Font Section Card
-                                    Row(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .padding(vertical = 8.dp)
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = stringResource(R.string.custom_font),
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                            if (customFontPath != null) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 24.dp, vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = customFontName ?: File(customFontPath!!).name,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    text = stringResource(R.string.custom_font),
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                                 )
+                                                if (customFontPath != null) {
+                                                    Text(
+                                                        text = customFontName ?: File(customFontPath!!).name,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                IconButton(
+                                                    onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) }
+                                                ) {
+                                                    Icon(Icons.Default.TextFields, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                }
+                                                if (customFontPath != null) {
+                                                    IconButton(onClick = { customFontPath = null }) {
+                                                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                                                    }
+                                                }
                                             }
                                         }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            IconButton(
-                                                onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) }
-                                            ) {
-                                                Icon(Icons.Default.TextFields, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                                            }
-                                            if (customFontPath != null) {
-                                                IconButton(onClick = { customFontPath = null }) {
-                                                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+
+                                        if (savedFonts.isNotEmpty()) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 24.dp),
+                                                thickness = 1.dp,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                                            )
+                                            
+                                            Text(
+                                                text = stringResource(R.string.saved_fonts),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                                            )
+                                            
+                                            savedFonts.forEach { font ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable { 
+                                                            customFontPath = font.path
+                                                            customFontName = font.name
+                                                        }
+                                                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = font.name,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    IconButton(
+                                                        onClick = {
+                                                            scope.launch { dataManager.removeSavedFont(font) }
+                                                            if (customFontPath == font.path) {
+                                                                customFontPath = null
+                                                            }
+                                                        },
+                                                        modifier = Modifier.size(24.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                                                    }
                                                 }
                                             }
                                         }
@@ -2423,18 +2634,6 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
         }
     }
 
-    if (showColorPicker) {
-        ColorPickerDialog(
-            initialColorHex = selectedColorHex ?: String.format("#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())),
-            showFollowSystem = false,
-            savedColors = savedColors,
-            onDeleteSavedColor = { scope.launch { dataManager.removeSavedColor(it) } },
-            onSaveColor = { scope.launch { dataManager.addSavedColor(it) } },
-            onDismiss = { showColorPicker = false },
-            onColorSelected = { selectedColorHex = it }
-        )
-    }
-
     if (cropOriginalUri != null) {
         ImageCropOverlay(
             originalUri = cropOriginalUri!!,
@@ -2452,7 +2651,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
             },
             onDismiss = { cropOriginalUri = null },
             onReselect = {
-                imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                navController.navigate("image_picker")
             }
         )
     }
@@ -2518,8 +2717,16 @@ fun CountdownItem(
     // Solid background with rounded corners or Image
     val hasImage = event.backgroundImageUri != null
     val cardBgColor = if (hasImage) Color.Black else baseColor
-    val titleColor = if (hasImage) (customColor ?: Color.White) else Color.White
-    val numberColor = if (hasImage) (customColor ?: Color.White).copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.6f)
+    val titleColor = if (hasImage) (customColor ?: Color.White) else {
+        // If it's a solid background, check if the color is light or dark
+        val luminance = baseColor.red * 0.299f + baseColor.green * 0.587f + baseColor.blue * 0.114f
+        if (luminance > 0.6f) Color.Black else Color.White
+    }
+    val numberColor = if (hasImage) (customColor ?: Color.White).copy(alpha = 0.9f) else {
+        // For numbers, we can also use contrast
+        val luminance = baseColor.red * 0.299f + baseColor.green * 0.587f + baseColor.blue * 0.114f
+        if (luminance > 0.6f) Color.Black.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.8f)
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -2783,8 +2990,14 @@ fun SmallCountdownItem(
     
     val hasImage = event.widgetImageUri != null
     val cardBgColor = if (hasImage) Color.Black else baseColor
-    val titleColor = if (hasImage) (customColor ?: Color.White) else Color.White
-    val numberColor = if (hasImage) (customColor ?: Color.White).copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.6f)
+    val titleColor = if (hasImage) (customColor ?: Color.White) else {
+        val luminance = baseColor.red * 0.299f + baseColor.green * 0.587f + baseColor.blue * 0.114f
+        if (luminance > 0.6f) Color.Black else Color.White
+    }
+    val numberColor = if (hasImage) (customColor ?: Color.White).copy(alpha = 0.9f) else {
+        val luminance = baseColor.red * 0.299f + baseColor.green * 0.587f + baseColor.blue * 0.114f
+        if (luminance > 0.6f) Color.Black.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.8f)
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth().aspectRatio(1f),

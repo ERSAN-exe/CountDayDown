@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
@@ -74,7 +75,7 @@ data class CountdownEvent(
     }
 
     fun countExcludedDaysBetween(start: LocalDateTime, end: LocalDateTime): Long {
-        if (excludedDays == null || excludedDays.isEmpty() || excludedDays.size >= 7) return 0
+        if (excludedDays.isNullOrEmpty() || excludedDays.size >= 7) return 0
         
         var count = 0L
         
@@ -104,6 +105,12 @@ data class CountdownEvent(
 }
 
 @Serializable
+data class SavedFont(
+    val path: String,
+    val name: String
+)
+
+@Serializable
 data class BackupData(
     val events: List<CountdownEvent>,
     val themeMode: Int,
@@ -111,176 +118,209 @@ data class BackupData(
     val notificationsEnabled: Boolean,
     val appBackgroundImage: String? = null,
     val appBackgroundBrightness: Float = 0.5f,
-    val appBackgroundThemeColor: String? = null
+    val appBackgroundThemeColor: String? = null,
+    val savedFonts: List<SavedFont> = emptyList()
 )
 
 class DataManager(private val context: Context) {
-    private val EVENTS_KEY = stringPreferencesKey("events_list")
-    private val THEME_MODE_KEY = intPreferencesKey("theme_mode") // 0: System, 1: Light, 2: Dark
-    private val THEME_COLOR_KEY = stringPreferencesKey("theme_color") // Hex color or null for default
-    private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
-    private val WIDGET_CONFIG_KEY = stringPreferencesKey("widget_config") // JSON map: widgetId (String) -> eventId (String)
-    private val SAVED_COLORS_KEY = stringPreferencesKey("saved_colors") // JSON list of hex strings
-    private val APP_BACKGROUND_IMAGE_KEY = stringPreferencesKey("app_bg_image")
-    private val APP_BACKGROUND_BRIGHTNESS_KEY = androidx.datastore.preferences.core.floatPreferencesKey("app_bg_brightness")
-    private val APP_BACKGROUND_THEME_COLOR_KEY = stringPreferencesKey("app_bg_theme_color")
+    private val eventsKey = stringPreferencesKey("events_list")
+    private val themeModeKey = intPreferencesKey("theme_mode") // 0: System, 1: Light, 2: Dark
+    private val themeColorKey = stringPreferencesKey("theme_color") // Hex color or null for default
+    private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
+    private val widgetConfigKey = stringPreferencesKey("widget_config") // JSON map: widgetId (String) -> eventId (String)
+    private val savedColorsKey = stringPreferencesKey("saved_colors") // JSON list of hex strings
+    private val savedFontsKey = stringPreferencesKey("saved_fonts") // JSON list of SavedFont objects
+    private val appBackgroundImageKey = stringPreferencesKey("app_bg_image")
+    private val appBackgroundBrightnessKey = androidx.datastore.preferences.core.floatPreferencesKey("app_bg_brightness")
+    private val appBackgroundThemeColorKey = stringPreferencesKey("app_bg_theme_color")
 
-    val events: Flow<List<CountdownEvent>> = context.dataStore.data.map { preferences ->
-        val json = preferences[EVENTS_KEY] ?: "[]"
-        try {
-            Json.decodeFromString<List<CountdownEvent>>(json)
-        } catch (_: Exception) {
-            emptyList()
+    val events: Flow<List<CountdownEvent>> = context.dataStore.data
+        .map { it[eventsKey] ?: "[]" }
+        .distinctUntilChanged()
+        .map { json ->
+            try { Json.decodeFromString<List<CountdownEvent>>(json) } catch (_: Exception) { emptyList() }
+        }
+
+    val savedColors: Flow<List<String>> = context.dataStore.data
+        .map { it[savedColorsKey] ?: "[]" }
+        .distinctUntilChanged()
+        .map { json ->
+            try { Json.decodeFromString<List<String>>(json) } catch (_: Exception) { emptyList() }
+        }
+
+    val savedFonts: Flow<List<SavedFont>> = context.dataStore.data
+        .map { it[savedFontsKey] ?: "[]" }
+        .distinctUntilChanged()
+        .map { json ->
+            try { Json.decodeFromString<List<SavedFont>>(json) } catch (_: Exception) { emptyList() }
+        }
+
+    suspend fun addSavedFont(font: SavedFont) {
+        context.dataStore.edit { preferences ->
+            val json = preferences[savedFontsKey] ?: "[]"
+            val list = try { Json.decodeFromString<List<SavedFont>>(json).toMutableList() } catch(_: Exception) { mutableListOf() }
+            if (list.none { it.path == font.path }) {
+                list.add(0, font)
+                preferences[savedFontsKey] = Json.encodeToString(list)
+            }
         }
     }
 
-    val savedColors: Flow<List<String>> = context.dataStore.data.map { preferences ->
-        val json = preferences[SAVED_COLORS_KEY] ?: "[]"
-        try {
-            Json.decodeFromString<List<String>>(json)
-        } catch (_: Exception) {
-            emptyList()
+    suspend fun removeSavedFont(font: SavedFont) {
+        context.dataStore.edit { preferences ->
+            val json = preferences[savedFontsKey] ?: "[]"
+            val list = try { Json.decodeFromString<List<SavedFont>>(json).toMutableList() } catch(_: Exception) { mutableListOf() }
+            if (list.remove(font)) {
+                preferences[savedFontsKey] = Json.encodeToString(list)
+                // Also delete the actual files
+                try {
+                    val file = java.io.File(font.path)
+                    if (file.exists()) file.delete()
+                    val nameFile = java.io.File("${font.path}.name")
+                    if (nameFile.exists()) nameFile.delete()
+                } catch (_: Exception) {}
+            }
         }
     }
 
     suspend fun addSavedColor(colorHex: String) {
         context.dataStore.edit { preferences ->
-            val json = preferences[SAVED_COLORS_KEY] ?: "[]"
+            val json = preferences[savedColorsKey] ?: "[]"
             val list = try { Json.decodeFromString<List<String>>(json).toMutableList() } catch(_: Exception) { mutableListOf() }
             if (!list.contains(colorHex)) {
                 list.add(0, colorHex)
                 if (list.size > 20) list.removeAt(list.size - 1)
-                preferences[SAVED_COLORS_KEY] = Json.encodeToString(list)
+                preferences[savedColorsKey] = Json.encodeToString(list)
             }
         }
     }
 
     suspend fun removeSavedColor(colorHex: String) {
         context.dataStore.edit { preferences ->
-            val json = preferences[SAVED_COLORS_KEY] ?: "[]"
+            val json = preferences[savedColorsKey] ?: "[]"
             val list = try { Json.decodeFromString<List<String>>(json).toMutableList() } catch(_: Exception) { mutableListOf() }
             if (list.remove(colorHex)) {
-                preferences[SAVED_COLORS_KEY] = Json.encodeToString(list)
+                preferences[savedColorsKey] = Json.encodeToString(list)
             }
         }
     }
 
     val themeMode: Flow<Int> = context.dataStore.data.map { preferences ->
-        preferences[THEME_MODE_KEY] ?: 0
+        preferences[themeModeKey] ?: 0
     }
 
     val themeColor: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[THEME_COLOR_KEY]
+        preferences[themeColorKey]
     }
 
     val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[NOTIFICATIONS_ENABLED_KEY] ?: true
+        preferences[notificationsEnabledKey] ?: true
     }
 
     val appBackgroundImage: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[APP_BACKGROUND_IMAGE_KEY]
+        preferences[appBackgroundImageKey]
     }
 
     val appBackgroundBrightness: Flow<Float> = context.dataStore.data.map { preferences ->
-        preferences[APP_BACKGROUND_BRIGHTNESS_KEY] ?: 0.5f
+        preferences[appBackgroundBrightnessKey] ?: 0.5f
     }
 
     val appBackgroundThemeColor: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[APP_BACKGROUND_THEME_COLOR_KEY]
+        preferences[appBackgroundThemeColorKey]
     }
 
-    private val SORT_ASCENDING_KEY = booleanPreferencesKey("sort_ascending")
-    private val SORT_BY_CREATION_KEY = booleanPreferencesKey("sort_by_creation")
-    private val IS_GRID_VIEW_KEY = booleanPreferencesKey("is_grid_view")
+    private val sortAscendingKey = booleanPreferencesKey("sort_ascending")
+    private val sortByCreationKey = booleanPreferencesKey("sort_by_creation")
+    private val isGridViewKey = booleanPreferencesKey("is_grid_view")
 
     val sortAscending: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SORT_ASCENDING_KEY] ?: false
+        preferences[sortAscendingKey] ?: false
     }
 
     val sortByCreationDate: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SORT_BY_CREATION_KEY] ?: true
+        preferences[sortByCreationKey] ?: true
     }
 
     val isGridView: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[IS_GRID_VIEW_KEY] ?: false
+        preferences[isGridViewKey] ?: false
     }
 
     suspend fun setSortAscending(ascending: Boolean) {
         context.dataStore.edit { preferences ->
-            preferences[SORT_ASCENDING_KEY] = ascending
+            preferences[sortAscendingKey] = ascending
         }
     }
 
     suspend fun setSortByCreationDate(byCreation: Boolean) {
         context.dataStore.edit { preferences ->
-            preferences[SORT_BY_CREATION_KEY] = byCreation
+            preferences[sortByCreationKey] = byCreation
         }
     }
 
     suspend fun setIsGridView(isGrid: Boolean) {
         context.dataStore.edit { preferences ->
-            preferences[IS_GRID_VIEW_KEY] = isGrid
+            preferences[isGridViewKey] = isGrid
         }
     }
 
     suspend fun saveEvents(events: List<CountdownEvent>) {
         context.dataStore.edit { preferences ->
-            preferences[EVENTS_KEY] = Json.encodeToString(events)
+            preferences[eventsKey] = Json.encodeToString(events)
         }
     }
 
     suspend fun setThemeMode(mode: Int) {
         context.dataStore.edit { preferences ->
-            preferences[THEME_MODE_KEY] = mode
+            preferences[themeModeKey] = mode
         }
     }
 
     suspend fun setThemeColor(colorHex: String?) {
         context.dataStore.edit { preferences ->
-            if (colorHex == null) preferences.remove(THEME_COLOR_KEY)
-            else preferences[THEME_COLOR_KEY] = colorHex
+            if (colorHex == null) preferences.remove(themeColorKey)
+            else preferences[themeColorKey] = colorHex
         }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
-            preferences[NOTIFICATIONS_ENABLED_KEY] = enabled
+            preferences[notificationsEnabledKey] = enabled
         }
     }
 
     suspend fun setAppBackgroundImage(uri: String?) {
         context.dataStore.edit { preferences ->
-            if (uri == null) preferences.remove(APP_BACKGROUND_IMAGE_KEY)
-            else preferences[APP_BACKGROUND_IMAGE_KEY] = uri
+            if (uri == null) preferences.remove(appBackgroundImageKey)
+            else preferences[appBackgroundImageKey] = uri
         }
     }
 
     suspend fun setAppBackgroundBrightness(brightness: Float) {
         context.dataStore.edit { preferences ->
-            preferences[APP_BACKGROUND_BRIGHTNESS_KEY] = brightness
+            preferences[appBackgroundBrightnessKey] = brightness
         }
     }
 
     suspend fun setAppBackgroundThemeColor(colorHex: String?) {
         context.dataStore.edit { preferences ->
-            if (colorHex == null) preferences.remove(APP_BACKGROUND_THEME_COLOR_KEY)
-            else preferences[APP_BACKGROUND_THEME_COLOR_KEY] = colorHex
+            if (colorHex == null) preferences.remove(appBackgroundThemeColorKey)
+            else preferences[appBackgroundThemeColorKey] = colorHex
         }
     }
 
     suspend fun setWidgetEvent(widgetId: Int, eventId: String?) {
         context.dataStore.edit { preferences ->
-            val json = preferences[WIDGET_CONFIG_KEY] ?: "{}"
+            val json = preferences[widgetConfigKey] ?: "{}"
             val map = Json.decodeFromString<MutableMap<String, String>>(json)
             if (eventId == null) map.remove(widgetId.toString())
             else map[widgetId.toString()] = eventId
-            preferences[WIDGET_CONFIG_KEY] = Json.encodeToString(map)
+            preferences[widgetConfigKey] = Json.encodeToString(map)
         }
     }
 
     fun getWidgetEvent(widgetId: Int): Flow<String?> {
         return context.dataStore.data.map { preferences ->
-            val json = preferences[WIDGET_CONFIG_KEY] ?: "{}"
+            val json = preferences[widgetConfigKey] ?: "{}"
             val map = Json.decodeFromString<Map<String, String>>(json)
             map[widgetId.toString()]
         }
@@ -288,32 +328,32 @@ class DataManager(private val context: Context) {
 
     suspend fun getAllData(): BackupData {
         val preferences = context.dataStore.data.first()
-        val eventsJson = preferences[EVENTS_KEY] ?: "[]"
+        val eventsJson = preferences[eventsKey] ?: "[]"
         val events = try { Json.decodeFromString<List<CountdownEvent>>(eventsJson) } catch(_: Exception) { emptyList() }
-        val mode = preferences[THEME_MODE_KEY] ?: 0
-        val color: String? = preferences[THEME_COLOR_KEY]
-        val notify = preferences[NOTIFICATIONS_ENABLED_KEY] ?: true
-        val bgImage = preferences[APP_BACKGROUND_IMAGE_KEY]
-        val bgBrightness = preferences[APP_BACKGROUND_BRIGHTNESS_KEY] ?: 0.5f
-        val bgThemeColor = preferences[APP_BACKGROUND_THEME_COLOR_KEY]
+        val mode = preferences[themeModeKey] ?: 0
+        val color: String? = preferences[themeColorKey]
+        val notify = preferences[notificationsEnabledKey] ?: true
+        val bgImage = preferences[appBackgroundImageKey]
+        val bgBrightness = preferences[appBackgroundBrightnessKey] ?: 0.5f
+        val bgThemeColor = preferences[appBackgroundThemeColorKey]
         return BackupData(events, mode, color, notify, bgImage, bgBrightness, bgThemeColor)
     }
 
     suspend fun restoreAllData(backup: BackupData) {
         context.dataStore.edit { preferences ->
-            preferences[EVENTS_KEY] = Json.encodeToString(backup.events)
-            preferences[THEME_MODE_KEY] = backup.themeMode
-            if (backup.themeColor == null) preferences.remove(THEME_COLOR_KEY)
-            else preferences[THEME_COLOR_KEY] = backup.themeColor
-            preferences[NOTIFICATIONS_ENABLED_KEY] = backup.notificationsEnabled
+            preferences[eventsKey] = Json.encodeToString(backup.events)
+            preferences[themeModeKey] = backup.themeMode
+            if (backup.themeColor == null) preferences.remove(themeColorKey)
+            else preferences[themeColorKey] = backup.themeColor
+            preferences[notificationsEnabledKey] = backup.notificationsEnabled
             
-            if (backup.appBackgroundImage == null) preferences.remove(APP_BACKGROUND_IMAGE_KEY)
-            else preferences[APP_BACKGROUND_IMAGE_KEY] = backup.appBackgroundImage
+            if (backup.appBackgroundImage == null) preferences.remove(appBackgroundImageKey)
+            else preferences[appBackgroundImageKey] = backup.appBackgroundImage
             
-            preferences[APP_BACKGROUND_BRIGHTNESS_KEY] = backup.appBackgroundBrightness
+            preferences[appBackgroundBrightnessKey] = backup.appBackgroundBrightness
             
-            if (backup.appBackgroundThemeColor == null) preferences.remove(APP_BACKGROUND_THEME_COLOR_KEY)
-            else preferences[APP_BACKGROUND_THEME_COLOR_KEY] = backup.appBackgroundThemeColor
+            if (backup.appBackgroundThemeColor == null) preferences.remove(appBackgroundThemeColorKey)
+            else preferences[appBackgroundThemeColorKey] = backup.appBackgroundThemeColor
         }
     }
 
