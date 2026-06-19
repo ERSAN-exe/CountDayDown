@@ -47,7 +47,8 @@
     <string name="unit_weeks">周</string>
     <string name="unit_months">月</string>
     <string name="unit_years">年</string>
-    <string name="card_color">卡片颜色</string>
+    <string name="card_color">背景颜色</string>
+    <string name="text_color">文字颜色</string>
     <string name="completed">已结束</string>
     <string name="remaining">还剩</string>
     <string name="changelog">更新日志</string>

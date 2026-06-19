@@ -47,7 +47,8 @@
     <string name="unit_weeks">주</string>
     <string name="unit_months">월</string>
     <string name="unit_years">년</string>
-    <string name="card_color">카드 색상</string>
+    <string name="card_color">배경 색상</string>
+    <string name="text_color">텍스트 색상</string>
     <string name="completed">종료</string>
     <string name="remaining">남음</string>
     <string name="changelog">업데이트 기록</string>

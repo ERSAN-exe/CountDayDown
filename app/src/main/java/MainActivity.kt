@@ -297,7 +297,7 @@ class MainActivity : ComponentActivity() {
                             }
                         ) { backStackEntry ->
                             val eventId = backStackEntry.arguments?.getString("eventId")
-                            AddEditScreen(navController, dataManager, eventId)
+                            AddEditScreen(navController, dataManager, eventId, backStackEntry)
                         }
                         composable(
                             "color_picker?initialColor={initialColor}",
@@ -1512,7 +1512,7 @@ fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddEditScreen(navController: NavController, dataManager: DataManager, eventId: String?) {
+fun AddEditScreen(navController: NavController, dataManager: DataManager, eventId: String?, backStackEntry: androidx.navigation.NavBackStackEntry) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val events by dataManager.events.collectAsState(initial = emptyList())
@@ -1523,17 +1523,35 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
         events.find { it.id == eventId }
     }
 
-    var name by remember(eventId) { mutableStateOf("") }
+    // Use rememberSaveable to persist state across navigation and configuration changes
+    var isInitialized by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf(false) }
+
+    var name by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("") }
     var nameError by remember { mutableStateOf(false) }
-    var selectedDate by remember(eventId) { mutableStateOf(LocalDate.now().plusDays(1)) }
-    var selectedTime by remember(eventId) { mutableStateOf(LocalTime.of(0, 0)) }
-    var selectedColorHex by remember(eventId) { mutableStateOf<String?>(null) }
     
-    var notificationContent by remember(eventId) { mutableStateOf("") }
-    var reminderMinutes by remember(eventId) { mutableIntStateOf(-1) }
-    var repeatType by remember(eventId) { mutableStateOf("none") }
-    var repeatInterval by remember(eventId) { mutableStateOf("1") }
-    var repeatUnit by remember(eventId) { mutableStateOf("days") }
+    // Custom Savers for LocalDate, LocalTime, and List<Int>
+    val localDateSaver = androidx.compose.runtime.saveable.Saver<LocalDate, String>(
+        save = { it.toString() },
+        restore = { LocalDate.parse(it) }
+    )
+    val localTimeSaver = androidx.compose.runtime.saveable.Saver<LocalTime, String>(
+        save = { it.toString() },
+        restore = { LocalTime.parse(it) }
+    )
+    val intListSaver = androidx.compose.runtime.saveable.Saver<List<Int>, String>(
+        save = { it.joinToString(",") },
+        restore = { if (it.isEmpty()) emptyList() else it.split(",").map { s -> s.toInt() } }
+    )
+
+    var selectedDate by androidx.compose.runtime.saveable.rememberSaveable(eventId, stateSaver = localDateSaver) { mutableStateOf(LocalDate.now().plusDays(1)) }
+    var selectedTime by androidx.compose.runtime.saveable.rememberSaveable(eventId, stateSaver = localTimeSaver) { mutableStateOf(LocalTime.of(0, 0)) }
+    var selectedColorHex by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
+    
+    var notificationContent by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("") }
+    var reminderMinutes by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableIntStateOf(-1) }
+    var repeatType by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("none") }
+    var repeatInterval by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("1") }
+    var repeatUnit by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("days") }
     var isRepeatMenuExpanded by remember { mutableStateOf(false) }
     var isRepeatUnitMenuExpanded by remember { mutableStateOf(false) }
 
@@ -1569,80 +1587,72 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    var backgroundImageUri by remember(eventId) { mutableStateOf(initialEvent?.backgroundImageUri) }
-    var widgetImageUri by remember(eventId) { mutableStateOf(initialEvent?.widgetImageUri) }
-    var backgroundBrightness by remember(eventId) { mutableFloatStateOf(initialEvent?.backgroundBrightness ?: 0.5f) }
-    var customFontPath by remember(eventId) { mutableStateOf(initialEvent?.customFontPath) }
-    var customFontName by remember(eventId) { 
-        mutableStateOf(initialEvent?.customFontPath?.let { path ->
-            val file = File(path)
-            if (file.exists()) {
-                val originalNameFile = File(file.parent, file.name + ".name")
-                val name = if (originalNameFile.exists()) try { originalNameFile.readText() } catch(_: Exception) { file.name } else file.name
-                name.removeSuffix(".ttf").removeSuffix(".TTF").removeSuffix(".otf").removeSuffix(".OTF")
-            } else null
-        })
-    }
+    var backgroundImageUri by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
+    var widgetImageUri by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
+    var backgroundBrightness by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableFloatStateOf(0.5f) }
+    var customFontPath by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
+    var customFontName by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
     
-    var isExcludeEnabled by remember(eventId) { mutableStateOf(initialEvent?.excludedDays?.isNotEmpty() == true) }
-    var selectedExcludedDays by remember(eventId) { mutableStateOf(initialEvent?.excludedDays ?: emptyList()) }
+    var isExcludeEnabled by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf(false) }
+    var selectedExcludedDays by androidx.compose.runtime.saveable.rememberSaveable(eventId, stateSaver = intListSaver) { mutableStateOf(emptyList()) }
     
     var cropOriginalUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Logic to populate fields when data is loaded from DataManager
-    var isInitialized by remember(eventId) { mutableStateOf(eventId == null) }
+    // Initialization logic from Database
     LaunchedEffect(initialEvent) {
-        if (initialEvent != null && !isInitialized) {
-            name = initialEvent.name
-            selectedDate = LocalDate.parse(initialEvent.targetDateTime.split("T")[0])
-            selectedTime = LocalTime.parse(initialEvent.targetDateTime.split("T")[1].substring(0, 5))
-            if (selectedColorHex == null) selectedColorHex = initialEvent.colorHex
-            notificationContent = initialEvent.notificationContent ?: ""
-            reminderMinutes = initialEvent.reminderMinutesBefore ?: -1
-            repeatType = initialEvent.repeatType ?: "none"
-            repeatInterval = initialEvent.repeatInterval?.toString() ?: "1"
-            repeatUnit = initialEvent.repeatUnit ?: "days"
-            if (backgroundImageUri == null) backgroundImageUri = initialEvent.backgroundImageUri
-            if (widgetImageUri == null) widgetImageUri = initialEvent.widgetImageUri
-            backgroundBrightness = initialEvent.backgroundBrightness
-            customFontPath = initialEvent.customFontPath
-            customFontName = initialEvent.customFontPath?.let { path ->
-                val file = File(path)
-                if (file.exists()) {
-                    val originalNameFile = File(file.parent, file.name + ".name")
-                    val name = if (originalNameFile.exists()) try { originalNameFile.readText() } catch(_: Exception) { file.name } else file.name
-                    name.removeSuffix(".ttf").removeSuffix(".TTF").removeSuffix(".otf").removeSuffix(".OTF")
-                } else null
+        if (!isInitialized) {
+            if (eventId == null) {
+                // New event: defaults are already set
+                isInitialized = true
+            } else if (initialEvent != null) {
+                // Edit event: load from initialEvent
+                name = initialEvent.name
+                selectedDate = LocalDate.parse(initialEvent.targetDateTime.split("T")[0])
+                selectedTime = LocalTime.parse(initialEvent.targetDateTime.split("T")[1].substring(0, 5))
+                selectedColorHex = initialEvent.colorHex
+                notificationContent = initialEvent.notificationContent ?: ""
+                reminderMinutes = initialEvent.reminderMinutesBefore ?: -1
+                repeatType = initialEvent.repeatType ?: "none"
+                repeatInterval = initialEvent.repeatInterval?.toString() ?: "1"
+                repeatUnit = initialEvent.repeatUnit ?: "days"
+                backgroundImageUri = initialEvent.backgroundImageUri
+                widgetImageUri = initialEvent.widgetImageUri
+                backgroundBrightness = initialEvent.backgroundBrightness
+                customFontPath = initialEvent.customFontPath
+                customFontName = initialEvent.customFontPath?.let { path ->
+                    val file = File(path)
+                    if (file.exists()) {
+                        val originalNameFile = File(file.parent, file.name + ".name")
+                        val nameFromDisk = if (originalNameFile.exists()) try { originalNameFile.readText() } catch(_: Exception) { file.name } else file.name
+                        nameFromDisk.removeSuffix(".ttf").removeSuffix(".TTF").removeSuffix(".otf").removeSuffix(".OTF")
+                    } else null
+                }
+                isExcludeEnabled = initialEvent.excludedDays?.isNotEmpty() == true
+                selectedExcludedDays = initialEvent.excludedDays ?: emptyList()
+                isInitialized = true
             }
-            isExcludeEnabled = initialEvent.excludedDays?.isNotEmpty() == true
-            selectedExcludedDays = initialEvent.excludedDays ?: emptyList()
-            isInitialized = true
         }
     }
 
-    val pickerResult = navController.currentBackStackEntry
-        ?.savedStateHandle
-        ?.getStateFlow<String?>("selected_image_uri", null)
-        ?.collectAsState()
-    
-    LaunchedEffect(pickerResult?.value) {
-        pickerResult?.value?.let { uriStr ->
-            backgroundImageUri = null
-            widgetImageUri = null
-            cropOriginalUri = uriStr.toUri()
-            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_image_uri")
+    // Results from other screens
+    val pickerResult = backStackEntry.savedStateHandle.getStateFlow<String?>("selected_image_uri", null).collectAsState()
+    LaunchedEffect(pickerResult.value) {
+        pickerResult.value?.let { uriStr ->
+            // ONLY clear image and start crop if we got a result, and we are not currently cropping that same URI
+            if (cropOriginalUri?.toString() != uriStr) {
+                backgroundImageUri = null
+                widgetImageUri = null
+                cropOriginalUri = uriStr.toUri()
+                backStackEntry.savedStateHandle.remove<String>("selected_image_uri")
+            }
         }
     }
 
-    val colorResult = navController.currentBackStackEntry
-        ?.savedStateHandle
-        ?.getStateFlow<String?>("selected_color", null)
-        ?.collectAsState()
-
-    LaunchedEffect(colorResult?.value) {
-        colorResult?.value?.let { color ->
+    val colorResult = backStackEntry.savedStateHandle.getStateFlow<String?>("selected_color", null).collectAsState()
+    LaunchedEffect(colorResult.value) {
+        colorResult.value?.let { color ->
             selectedColorHex = color
-            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_color")
+            backStackEntry.savedStateHandle.remove<String>("selected_color")
         }
     }
 
@@ -2141,41 +2151,66 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     // Image & Color UI
                                     Spacer(modifier = Modifier.height(8.dp))
                                     // Color Section Card
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                            .clickable { 
-                                                val encodedColor = selectedColorHex?.let { Uri.encode(it) } ?: ""
-                                                navController.navigate("color_picker?initialColor=$encodedColor")
-                                            }
-                                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                    AnimatedVisibility(
+                                        visible = backgroundImageUri == null,
+                                        enter = fadeIn() + expandVertically(),
+                                        exit = fadeOut() + shrinkVertically()
                                     ) {
-                                        Column {
-                                            Text(
-                                                text = stringResource(R.string.card_color),
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                            Text(
-                                                text = selectedColorHex ?: String.format(LocalConfiguration.current.locales[0], "#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    MaterialTheme.colorScheme.primaryContainer,
+                                                    RoundedCornerShape(24.dp)
+                                                )
+                                                .clickable {
+                                                    val encodedColor =
+                                                        selectedColorHex?.let { Uri.encode(it) } ?: ""
+                                                    navController.navigate("color_picker?initialColor=$encodedColor")
+                                                }
+                                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = stringResource(R.string.card_color),
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                                Text(
+                                                    text = selectedColorHex
+                                                        ?: String.format(
+                                                            LocalConfiguration.current.locales[0],
+                                                            "#%06X",
+                                                            (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())
+                                                        ),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                                                        alpha = 0.7f
+                                                    )
+                                                )
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .background(
+                                                        selectedColorHex?.let {
+                                                            try {
+                                                                Color(it.toColorInt())
+                                                            } catch (_: Exception) {
+                                                                MaterialTheme.colorScheme.primary
+                                                            }
+                                                        } ?: MaterialTheme.colorScheme.primary,
+                                                        CircleShape
+                                                    )
                                             )
                                         }
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .background(
-                                                    selectedColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { MaterialTheme.colorScheme.primary } } ?: MaterialTheme.colorScheme.primary,
-                                                    CircleShape
-                                                )
-                                        )
                                     }
 
-                                    Spacer(modifier = Modifier.height(16.dp))
+                                    if (backgroundImageUri == null) {
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                    }
 
                                     // Background Image Section Card
                                     Row(
@@ -2268,6 +2303,45 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                     valueRange = 0f..1f,
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
+
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                HorizontalDivider(
+                                                    thickness = 1.dp,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                                                )
+                                                Spacer(modifier = Modifier.height(8.dp))
+
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable { 
+                                                            val encodedColor = selectedColorHex?.let { Uri.encode(it) } ?: ""
+                                                            navController.navigate("color_picker?initialColor=$encodedColor")
+                                                        },
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column {
+                                                        Text(
+                                                            text = stringResource(R.string.text_color),
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        )
+                                                        Text(
+                                                            text = selectedColorHex ?: "#FFFFFF",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                                        )
+                                                    }
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .background(
+                                                                selectedColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { Color.White } } ?: Color.White,
+                                                                CircleShape
+                                                            )
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -2711,8 +2785,7 @@ fun CountdownItem(
     val seconds = absDuration.seconds % 60
 
     val customColor = event.colorHex?.let { try { Color(it.toColorInt()) } catch(_:Exception) { null } }
-    val isFuture = !isPast
-    val baseColor = customColor ?: (if (isFuture) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+    val baseColor = customColor ?: MaterialTheme.colorScheme.primary
     
     // Solid background with rounded corners or Image
     val hasImage = event.backgroundImageUri != null
@@ -2985,8 +3058,7 @@ fun SmallCountdownItem(
     val seconds = absDuration.seconds % 60
 
     val customColor = event.colorHex?.let { try { Color(it.toColorInt()) } catch(_:Exception) { null } }
-    val isFuture = !isPast
-    val baseColor = customColor ?: (if (isFuture) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+    val baseColor = customColor ?: MaterialTheme.colorScheme.primary
     
     val hasImage = event.widgetImageUri != null
     val cardBgColor = if (hasImage) Color.Black else baseColor

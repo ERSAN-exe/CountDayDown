@@ -47,7 +47,8 @@
     <string name="unit_weeks">w</string>
     <string name="unit_months">M</string>
     <string name="unit_years">y</string>
-    <string name="card_color">Card Color</string>
+    <string name="card_color">Background Color</string>
+    <string name="text_color">Text Color</string>
     <string name="completed">Completed</string>
     <string name="remaining">Remaining</string>
     <string name="changelog">Changelog</string>
