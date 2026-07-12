@@ -43,6 +43,12 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ImagePickerScreen(navController: NavController, dataManager: DataManager, onImageSelected: (Uri) -> Unit) {
     val context = LocalContext.current
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
     var images by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var selectedImage by remember { mutableStateOf<Uri?>(null) }
     
@@ -57,11 +63,6 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
     val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
 
     var hasPermission by remember {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
         mutableStateOf(ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED)
     }
 
@@ -82,11 +83,6 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
 
     LaunchedEffect(hasPermission) {
         if (!hasPermission) {
-            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Manifest.permission.READ_MEDIA_IMAGES
-            } else {
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            }
             permissionLauncher.launch(permission)
         } else {
             withContext(Dispatchers.IO) {

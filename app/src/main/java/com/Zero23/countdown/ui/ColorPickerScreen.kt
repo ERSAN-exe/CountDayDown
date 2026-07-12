@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -43,7 +44,8 @@ import kotlinx.coroutines.launch
 fun ColorPickerScreen(
     navController: NavController,
     dataManager: DataManager,
-    initialColorHex: String?
+    initialColorHex: String?,
+    isDark: Boolean
 ) {
     val scope = rememberCoroutineScope()
 
@@ -52,7 +54,7 @@ fun ColorPickerScreen(
 
     // Load initial color or default to theme primary
     val defaultColor = String.format("#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb()))
-    val startColor = initialColorHex ?: defaultColor
+    val startColor = if (initialColorHex.isNullOrEmpty()) defaultColor else initialColorHex
 
     var selectedColor by remember { mutableStateOf(try { Color(startColor.toColorInt()) } catch(_: Exception) { Color.Blue }) }
     var savedColors by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -97,10 +99,14 @@ fun ColorPickerScreen(
         "#88DD44", "#FFCCAA", "#99CCFF", "#FFAACC", "#99EEDD"
     )
 
-    val isDark = MaterialTheme.colorScheme.background.toArgb() == Color(0xFF1C1B1F).toArgb()
     val bgColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background
-    val pickerAccent = MaterialTheme.colorScheme.primaryContainer
-    val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+    
+    // Dynamic preview of accents based on selected color
+    val pickerAccent = selectedColor.copy(alpha = if (isDark) 0.45f else 0.25f).compositeOver(if (isDark) Color(0xFF121212) else Color.White)
+    val contentColor = if (isDark) Color.White else Color.Black
+
+    val fieldBg = MaterialTheme.colorScheme.surface
+    val onFieldColor = MaterialTheme.colorScheme.onSurface
     
     Box(modifier = Modifier.fillMaxSize()) {
         if (appBgImage != null) {
@@ -218,6 +224,7 @@ fun ColorPickerScreen(
                         .height(80.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(selectedColor)
+                        .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -253,8 +260,8 @@ fun ColorPickerScreen(
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(color)
                                                 .border(
-                                                    width = if (colorHex.equals("#FFFFFF", ignoreCase = true)) 1.dp else 0.dp,
-                                                    color = if (colorHex.equals("#FFFFFF", ignoreCase = true)) Color.Gray.copy(alpha = 0.5f) else Color.Transparent,
+                                                    width = if (colorHex.equals("#FFFFFF", ignoreCase = true) || (isDark && colorHex.equals("#000000", ignoreCase = true))) 1.dp else 0.dp,
+                                                    color = if (colorHex.equals("#FFFFFF", ignoreCase = true) || (isDark && colorHex.equals("#000000", ignoreCase = true))) Color.Gray.copy(alpha = 0.5f) else Color.Transparent,
                                                     shape = RoundedCornerShape(10.dp)
                                                 )
                                                 .clickable {
@@ -320,8 +327,6 @@ fun ColorPickerScreen(
                                                     )
                                             )
                                         }
-                                        // If less than 5 items, we can add spacers if needed, 
-                                        // but Arrangement.spacedBy(spacing) is good for the last row.
                                     }
                                 }
                             }
@@ -492,12 +497,12 @@ fun ColorPickerScreen(
                                             } catch (_: Exception) {}
                                         }
                                     },
-                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = contentColor),
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = onFieldColor),
                                     singleLine = true,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color.White, RoundedCornerShape(12.dp))
-                                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+                                        .background(fieldBg, RoundedCornerShape(12.dp))
+                                        .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                                         .padding(horizontal = 8.dp, vertical = 8.dp)
                                 )
                             }
@@ -523,12 +528,12 @@ fun ColorPickerScreen(
                                         } catch (_: Exception) {}
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = contentColor),
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = onFieldColor),
                                     singleLine = true,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color.White, RoundedCornerShape(12.dp))
-                                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+                                        .background(fieldBg, RoundedCornerShape(12.dp))
+                                        .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                                         .padding(horizontal = 8.dp, vertical = 6.dp)
                                 )
                                 // G Field
@@ -544,12 +549,12 @@ fun ColorPickerScreen(
                                         } catch (_: Exception) {}
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = contentColor),
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = onFieldColor),
                                     singleLine = true,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color.White, RoundedCornerShape(12.dp))
-                                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+                                        .background(fieldBg, RoundedCornerShape(12.dp))
+                                        .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                                         .padding(horizontal = 8.dp, vertical = 6.dp)
                                 )
                                 // B Field
@@ -565,12 +570,12 @@ fun ColorPickerScreen(
                                         } catch (_: Exception) {}
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = contentColor),
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = onFieldColor),
                                     singleLine = true,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color.White, RoundedCornerShape(12.dp))
-                                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+                                        .background(fieldBg, RoundedCornerShape(12.dp))
+                                        .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                                         .padding(horizontal = 8.dp, vertical = 6.dp)
                                 )
                             }

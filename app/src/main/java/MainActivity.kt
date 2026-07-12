@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTransformGestures
 import android.content.pm.PackageManager
@@ -46,7 +47,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -183,7 +183,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    if (isDarkTheme) Color.Black.copy(alpha = appBgBrightness)
+                                    if (isDarkTheme) Color(0xFF121212).copy(alpha = appBgBrightness)
                                     else Color.White.copy(alpha = appBgBrightness)
                                 )
                         )
@@ -309,7 +309,8 @@ class MainActivity : ComponentActivity() {
                             com.Zero23.countdown.ui.ColorPickerScreen(
                                 navController = navController,
                                 dataManager = dataManager,
-                                initialColorHex = initialColor
+                                initialColorHex = initialColor,
+                                isDark = isDarkTheme
                             )
                         }
                     }
@@ -347,8 +348,6 @@ var isSyncingGlobal by mutableStateOf(false)
 fun CountdownApp(navController: NavController, dataManager: DataManager) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val exportSuccessMsg = stringResource(R.string.export_success)
-    val importSuccessMsg = stringResource(R.string.import_success)
 
     val rawEvents by dataManager.events.collectAsState(initial = emptyList())
     val sortAscendingPref by dataManager.sortAscending.collectAsState(initial = false)
@@ -375,8 +374,420 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
     }
     
     var eventToDelete by remember { mutableStateOf<CountdownEvent?>(null) }
-    var isBackupMenuExpanded by remember { mutableStateOf(false) }
 
+    val copySuffix = stringResource(R.string.copy_suffix)
+    val onCopy: (CountdownEvent) -> Unit = { event ->
+        scope.launch(Dispatchers.IO) {
+            val currentEvents = dataManager.events.first()
+
+            var newBgUri = event.backgroundImageUri
+            var newWidgetUri = event.widgetImageUri
+
+            // Try to copy image files to avoid broken links on deletion
+            try {
+                event.backgroundImageUri?.let { uriStr ->
+                    val uri = uriStr.toUri()
+                    if (uri.scheme == "file") {
+                        val oldFile = File(uri.path!!)
+                        if (oldFile.exists()) {
+                            val newFile = File(context.filesDir, "bg_${UUID.randomUUID()}.jpg")
+                            oldFile.copyTo(newFile)
+                            newBgUri = Uri.fromFile(newFile).toString()
+                        }
+                    }
+                }
+                event.widgetImageUri?.let { uriStr ->
+                    val uri = uriStr.toUri()
+                    if (uri.scheme == "file") {
+                        val oldFile = File(uri.path!!)
+                        if (oldFile.exists()) {
+                            val newFile = File(context.filesDir, "widget_${UUID.randomUUID()}.jpg")
+                            oldFile.copyTo(newFile)
+                            newWidgetUri = Uri.fromFile(newFile).toString()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            val newEvent = event.copy(
+                id = UUID.randomUUID().toString(),
+                name = "${event.name}$copySuffix",
+                backgroundImageUri = newBgUri,
+                widgetImageUri = newWidgetUri,
+                createdAt = System.currentTimeMillis()
+            )
+
+            withContext(Dispatchers.Main) {
+                dataManager.saveEvents(currentEvents + newEvent)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTick = LocalDateTime.now().plusSeconds(globalTimeOffset)
+            delay(1000.milliseconds)
+        }
+    }
+
+    val fetchTime = {
+        isSyncingGlobal = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                val connection = URL("https://www.microsoft.com").openConnection()
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                val dateHeader = connection.getHeaderField("Date")
+                val networkNow = if (dateHeader != null) {
+                    val httpFormatter = DateTimeFormatter.RFC_1123_DATE_TIME
+                    LocalDateTime.ofInstant(Instant.from(httpFormatter.parse(dateHeader)), ZoneId.systemDefault())
+                } else {
+                    val response = URL("https://worldtimeapi.org/api/timezone/Etc/UTC").readText()
+                    val json = JSONObject(response)
+                    val datetime = json.getString("datetime")
+                    Instant.parse(datetime).atZone(ZoneId.systemDefault()).toLocalDateTime()
+                }
+                
+                withContext(Dispatchers.Main) {
+                    globalTimeOffset = Duration.between(LocalDateTime.now(), networkNow).seconds
+                    lastSyncTimeMillis = System.currentTimeMillis()
+                    isSyncingGlobal = false
+                    // Update currentTick immediately after sync
+                    currentTick = networkNow
+                }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) {
+                    isSyncingGlobal = false
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            fetchTime()
+            delay(5.minutes) // 每5分钟同步一次
+        }
+    }
+
+    val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+
+    Scaffold(
+        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { navController.navigate("add_edit") },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.create_card), tint = Color.White)
+            }
+        }
+    ) { innerPadding ->
+        Column(modifier = Modifier.padding(innerPadding)) {
+            // Custom Top Bar Area
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier
+                        .width(220.dp)
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                        .padding(vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 20.sp)
+                    Text(
+                        text = if (isSyncingGlobal) stringResource(R.string.syncing) else "${stringResource(R.string.current_time)}${currentTick.format(formatter)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        if (navController.currentDestination?.route == "home") {
+                            navController.navigate("settings")
+                        }
+                    },
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
+                        .size(48.dp)
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (rawEvents.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Switch Button
+                    Box(
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(20.dp))
+                            .width(88.dp)
+                            .height(40.dp)
+                            .clickable { scope.launch { dataManager.setIsGridView(!isGridView) } }
+                            .padding(4.dp)
+                    ) {
+                        // Sliding white background
+                        val isLeftSelected = !isGridView
+                        val alignment = if (isLeftSelected) Alignment.CenterStart else Alignment.CenterEnd
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(40.dp)
+                                .align(alignment)
+                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                        )
+
+                        // Icons
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Left Icon: List View (two horizontal lines)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    modifier = Modifier.wrapContentSize(),
+                                    verticalArrangement = Arrangement.spacedBy(2.5.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(15.dp)
+                                            .height(5.dp)
+                                            .background(MaterialTheme.colorScheme.onSurface, RoundedCornerShape(1.5.dp))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(15.dp)
+                                            .height(5.dp)
+                                            .background(MaterialTheme.colorScheme.onSurface, RoundedCornerShape(1.5.dp))
+                                    )
+                                }
+                            }
+                            // Right Icon: Grid View (four squares)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    modifier = Modifier.wrapContentSize(),
+                                    verticalArrangement = Arrangement.spacedBy(2.5.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(width = 6.5.dp, height = 5.dp)
+                                                .background(MaterialTheme.colorScheme.onSurface, RoundedCornerShape(1.5.dp))
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(width = 6.5.dp, height = 5.dp)
+                                                .background(MaterialTheme.colorScheme.onSurface, RoundedCornerShape(1.5.dp))
+                                        )
+                                    }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(width = 6.5.dp, height = 5.dp)
+                                                .background(MaterialTheme.colorScheme.onSurface, RoundedCornerShape(1.5.dp))
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(width = 6.5.dp, height = 5.dp)
+                                                .background(MaterialTheme.colorScheme.onSurface, RoundedCornerShape(1.5.dp))
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Row(
+                        modifier = Modifier.clickable { 
+                            scope.launch {
+                                if (sortByCreationDate) {
+                                    if (!sortAscending) {
+                                        dataManager.setSortByCreationDate(false)
+                                        dataManager.setSortAscending(true)
+                                    } else {
+                                        dataManager.setSortAscending(false)
+                                    }
+                                } else {
+                                    if (!sortAscending) {
+                                        dataManager.setSortByCreationDate(true)
+                                        dataManager.setSortAscending(true)
+                                    } else {
+                                        dataManager.setSortAscending(false)
+                                    }
+                                }
+                            }
+                        },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (sortByCreationDate) stringResource(R.string.sort_by_creation) else stringResource(R.string.sort_by_time),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Icon(
+                            imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            if (events.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.add_new_event), color = MaterialTheme.colorScheme.outline)
+                }
+            } else {
+                AnimatedContent(
+                    targetState = isGridView,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                    },
+                    label = "listGridAnimation"
+                ) { targetIsGridView ->
+                    if (targetIsGridView) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(16.dp)
+                        ) {
+                            items(items = events, key = { it.id }) { event ->
+                                SmallCountdownItem(
+                                    event = event,
+                                    now = currentTick,
+                                    onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
+                                    onDelete = { eventToDelete = event },
+                                    onCopy = { onCopy(event) }
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(16.dp)
+                        ) {
+                            items(items = events, key = { it.id }) { event ->
+                                CountdownItem(
+                                    event = event,
+                                    now = currentTick,
+                                    onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
+                                    onDelete = { eventToDelete = event },
+                                    onCopy = { onCopy(event) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (eventToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { eventToDelete = null },
+                title = { Text(stringResource(R.string.delete_confirm_title)) },
+                text = { Text(stringResource(R.string.delete_confirm_msg, eventToDelete?.name ?: "")) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            eventToDelete?.let { event ->
+                                val id = event.id
+                                val newList = events.filter { it.id != id }
+                                scope.launch { 
+                                    dataManager.saveEvents(newList)
+                                    NotificationHelper.cancelNotification(context, id)
+                                    
+                                    // Delete associated image files
+                                    try {
+                                        event.backgroundImageUri?.let { uriStr ->
+                                            val uri = uriStr.toUri()
+                                            if (uri.scheme == "file") {
+                                                val file = File(uri.path ?: return@let)
+                                                if (file.exists()) file.delete()
+                                            }
+                                        }
+                                        event.widgetImageUri?.let { uriStr ->
+                                            val uri = uriStr.toUri()
+                                            if (uri.scheme == "file") {
+                                                val file = File(uri.path ?: return@let)
+                                                if (file.exists()) file.delete()
+                                            }
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                            eventToDelete = null
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(stringResource(R.string.delete))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { eventToDelete = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(navController: NavController, dataManager: DataManager, onPickBg: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val exportSuccessMsg = stringResource(R.string.export_success)
+    val importSuccessMsg = stringResource(R.string.import_success)
+    
+    val themeMode by dataManager.themeMode.collectAsState(initial = 0)
+    val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
+    val notificationsEnabled by dataManager.notificationsEnabled.collectAsState(initial = true)
+
+    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
+    val appBgThemeColor by dataManager.appBackgroundThemeColor.collectAsState(initial = null)
+    val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
+    
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         uri?.let {
             scope.launch(Dispatchers.IO) {
@@ -569,399 +980,6 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
             }
         }
     }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            currentTick = LocalDateTime.now().plusSeconds(globalTimeOffset)
-            delay(1000.milliseconds)
-        }
-    }
-
-    val fetchTime = {
-        isSyncingGlobal = true
-        scope.launch(Dispatchers.IO) {
-            try {
-                val connection = URL("https://www.microsoft.com").openConnection()
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
-                val dateHeader = connection.getHeaderField("Date")
-                val networkNow = if (dateHeader != null) {
-                    val httpFormatter = DateTimeFormatter.RFC_1123_DATE_TIME
-                    LocalDateTime.ofInstant(Instant.from(httpFormatter.parse(dateHeader)), ZoneId.systemDefault())
-                } else {
-                    val response = URL("https://worldtimeapi.org/api/timezone/Etc/UTC").readText()
-                    val json = JSONObject(response)
-                    val datetime = json.getString("datetime")
-                    Instant.parse(datetime).atZone(ZoneId.systemDefault()).toLocalDateTime()
-                }
-                
-                withContext(Dispatchers.Main) {
-                    globalTimeOffset = Duration.between(LocalDateTime.now(), networkNow).seconds
-                    lastSyncTimeMillis = System.currentTimeMillis()
-                    isSyncingGlobal = false
-                    // Update currentTick immediately after sync
-                    currentTick = networkNow
-                }
-            } catch (_: Exception) {
-                withContext(Dispatchers.Main) {
-                    isSyncingGlobal = false
-                }
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            fetchTime()
-            delay(5.minutes) // 每5分钟同步一次
-        }
-    }
-
-    val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
-
-    Scaffold(
-        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { navController.navigate("add_edit") },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.create_card), tint = Color.White)
-            }
-        }
-    ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
-            // Custom Top Bar Area
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier
-                        .width(220.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                        .padding(vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 20.sp)
-                    Text(
-                        text = if (isSyncingGlobal) stringResource(R.string.syncing) else "${stringResource(R.string.current_time)}${currentTick.format(formatter)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box {
-                        IconButton(
-                            onClick = { isBackupMenuExpanded = true },
-                            modifier = Modifier
-                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
-                                .size(48.dp)
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = "Import/Export", tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                        DropdownMenu(
-                            expanded = isBackupMenuExpanded,
-                            onDismissRequest = { isBackupMenuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.import_config)) },
-                                leadingIcon = { Icon(Icons.Default.FileDownload, null) },
-                                onClick = {
-                                    isBackupMenuExpanded = false
-                                    importLauncher.launch(arrayOf("text/plain", "application/zip"))
-                                }
-                            )
-                            val backupPrefix = stringResource(R.string.backup)
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.export_config)) },
-                                leadingIcon = { Icon(Icons.Default.FileUpload, null) },
-                                onClick = {
-                                    isBackupMenuExpanded = false
-                                    val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
-                                    exportLauncher.launch("${backupPrefix}_$time.zip")
-                                }
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = {
-                            if (navController.currentDestination?.route == "home") {
-                                navController.navigate("settings")
-                            }
-                        },
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
-                            .size(48.dp)
-                    ) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (rawEvents.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Switch Button
-                    Box(
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(20.dp))
-                            .width(88.dp)
-                            .height(40.dp)
-                            .clickable { scope.launch { dataManager.setIsGridView(!isGridView) } }
-                            .padding(4.dp)
-                    ) {
-                        // Sliding white background
-                        val isLeftSelected = !isGridView
-                        val alignment = if (isLeftSelected) Alignment.CenterStart else Alignment.CenterEnd
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(40.dp)
-                                .align(alignment)
-                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-                        )
-
-                        // Icons
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Left Icon: List View (two horizontal lines)
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    modifier = Modifier.wrapContentSize(),
-                                    verticalArrangement = Arrangement.spacedBy(2.5.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(15.dp)
-                                            .height(5.dp)
-                                            .background(Color.Black, RoundedCornerShape(1.5.dp))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .width(15.dp)
-                                            .height(5.dp)
-                                            .background(Color.Black, RoundedCornerShape(1.5.dp))
-                                    )
-                                }
-                            }
-                            // Right Icon: Grid View (four squares)
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    modifier = Modifier.wrapContentSize(),
-                                    verticalArrangement = Arrangement.spacedBy(2.5.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(width = 6.5.dp, height = 5.dp)
-                                                .background(Color.Black, RoundedCornerShape(1.5.dp))
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .size(width = 6.5.dp, height = 5.dp)
-                                                .background(Color.Black, RoundedCornerShape(1.5.dp))
-                                        )
-                                    }
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(width = 6.5.dp, height = 5.dp)
-                                                .background(Color.Black, RoundedCornerShape(1.5.dp))
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .size(width = 6.5.dp, height = 5.dp)
-                                                .background(Color.Black, RoundedCornerShape(1.5.dp))
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Row(
-                        modifier = Modifier.clickable { 
-                            scope.launch {
-                                if (sortByCreationDate) {
-                                    if (!sortAscending) {
-                                        dataManager.setSortByCreationDate(false)
-                                        dataManager.setSortAscending(true)
-                                    } else {
-                                        dataManager.setSortAscending(false)
-                                    }
-                                } else {
-                                    if (!sortAscending) {
-                                        dataManager.setSortByCreationDate(true)
-                                        dataManager.setSortAscending(true)
-                                    } else {
-                                        dataManager.setSortAscending(false)
-                                    }
-                                }
-                            }
-                        },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (sortByCreationDate) stringResource(R.string.sort_by_creation) else stringResource(R.string.sort_by_time),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Icon(
-                            imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            if (events.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.add_new_event), color = MaterialTheme.colorScheme.outline)
-                }
-            } else {
-                AnimatedContent(
-                    targetState = isGridView,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
-                    },
-                    label = "listGridAnimation"
-                ) { targetIsGridView ->
-                    if (targetIsGridView) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(16.dp)
-                        ) {
-                            items(items = events, key = { it.id }) { event ->
-                                SmallCountdownItem(
-                                    event = event,
-                                    now = currentTick,
-                                    onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
-                                    onDelete = { eventToDelete = event }
-                                )
-                            }
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(16.dp)
-                        ) {
-                            items(items = events, key = { it.id }) { event ->
-                                CountdownItem(
-                                    event = event,
-                                    now = currentTick,
-                                    onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
-                                    onDelete = { eventToDelete = event }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (eventToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { eventToDelete = null },
-                title = { Text(stringResource(R.string.delete_confirm_title)) },
-                text = { Text(stringResource(R.string.delete_confirm_msg, eventToDelete?.name ?: "")) },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            eventToDelete?.let { event ->
-                                val id = event.id
-                                val newList = events.filter { it.id != id }
-                                scope.launch { 
-                                    dataManager.saveEvents(newList)
-                                    NotificationHelper.cancelNotification(context, id)
-                                    
-                                    // Delete associated image files
-                                    try {
-                                        event.backgroundImageUri?.let { uriStr ->
-                                            val uri = uriStr.toUri()
-                                            if (uri.scheme == "file") {
-                                                val file = File(uri.path ?: return@let)
-                                                if (file.exists()) file.delete()
-                                            }
-                                        }
-                                        event.widgetImageUri?.let { uriStr ->
-                                            val uri = uriStr.toUri()
-                                            if (uri.scheme == "file") {
-                                                val file = File(uri.path ?: return@let)
-                                                if (file.exists()) file.delete()
-                                            }
-                                        }
-                                    } catch (_: Exception) {}
-                                }
-                            }
-                            eventToDelete = null
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text(stringResource(R.string.delete))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { eventToDelete = null }) {
-                        Text(stringResource(R.string.cancel))
-                    }
-                }
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SettingsScreen(navController: NavController, dataManager: DataManager, onPickBg: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val themeMode by dataManager.themeMode.collectAsState(initial = 0)
-    val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
-    val notificationsEnabled by dataManager.notificationsEnabled.collectAsState(initial = true)
-
-    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
-    val appBgThemeColor by dataManager.appBackgroundThemeColor.collectAsState(initial = null)
-    val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
     
     // Listen for color selection result
     val colorResult = navController.currentBackStackEntry
@@ -1168,37 +1186,44 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Global Background Image Card
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(16.dp)
                 ) {
-                    Text(stringResource(R.string.background_image), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (appBgImage != null) {
-                            IconButton(onClick = { scope.launch { dataManager.setAppBackgroundImage(null) } }) {
-                                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(stringResource(R.string.background_image), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (appBgImage != null) {
+                                IconButton(onClick = { scope.launch { dataManager.setAppBackgroundImage(null) } }) {
+                                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                            IconButton(onClick = { onPickBg() }) {
+                                Icon(Icons.Default.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                         }
-                        IconButton(onClick = { onPickBg() }) {
-                            Icon(Icons.Default.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
                     }
-                }
 
-                if (appBgImage != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                            .padding(16.dp)
-                    ) {
-                        Text(stringResource(R.string.mask_intensity), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    if (appBgImage != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = stringResource(R.string.mask_intensity),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
                         Slider(
                             value = appBgBrightness,
                             onValueChange = { scope.launch { dataManager.setAppBackgroundBrightness(it) } },
@@ -1273,14 +1298,69 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                         onCheckedChange = { scope.launch { dataManager.setNotificationsEnabled(it) } },
                         enabled = hasNotifPermission,
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            checkedBorderColor = Color.Transparent,
                             uncheckedThumbColor = Color.White,
                             uncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            uncheckedBorderColor = Color.Transparent,
                             disabledUncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
                             disabledUncheckedThumbColor = Color.Gray.copy(alpha = 0.5f)
                         )
                     )
+                }
+
+                // Import Section
+                Text(
+                    text = stringResource(R.string.backup_restore),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        onClick = { importLauncher.launch(arrayOf("text/plain", "application/zip")) },
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(Icons.Default.FileDownload, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.import_config), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+
+                    val backupPrefix = stringResource(R.string.backup)
+                    Surface(
+                        onClick = {
+                            val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                            exportLauncher.launch("${backupPrefix}_$time.zip")
+                        },
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(Icons.Default.FileUpload, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.export_config), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
 
                 // About Section
@@ -1373,7 +1453,7 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "GitHub",
+                            text = stringResource(R.string.github),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
@@ -1943,6 +2023,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                         event = previewEvent,
                         onEdit = {},
                         onDelete = {},
+                        onCopy = {},
                         showActions = false,
                         now = previewNow
                     )
@@ -2151,195 +2232,151 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     // Image & Color UI
                                     Spacer(modifier = Modifier.height(8.dp))
                                     // Color Section Card
-                                    AnimatedVisibility(
-                                        visible = backgroundImageUri == null,
-                                        enter = fadeIn() + expandVertically(),
-                                        exit = fadeOut() + shrinkVertically()
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(
-                                                    MaterialTheme.colorScheme.primaryContainer,
-                                                    RoundedCornerShape(24.dp)
-                                                )
-                                                .clickable {
-                                                    val encodedColor =
-                                                        selectedColorHex?.let { Uri.encode(it) } ?: ""
-                                                    navController.navigate("color_picker?initialColor=$encodedColor")
-                                                }
-                                                .padding(horizontal = 24.dp, vertical = 16.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column {
-                                                Text(
-                                                    text = stringResource(R.string.card_color),
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                )
-                                                Text(
-                                                    text = selectedColorHex
-                                                        ?: String.format(
-                                                            LocalConfiguration.current.locales[0],
-                                                            "#%06X",
-                                                            (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())
-                                                        ),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(
-                                                        alpha = 0.7f
-                                                    )
-                                                )
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .background(
-                                                        selectedColorHex?.let {
-                                                            try {
-                                                                Color(it.toColorInt())
-                                                            } catch (_: Exception) {
-                                                                MaterialTheme.colorScheme.primary
-                                                            }
-                                                        } ?: MaterialTheme.colorScheme.primary,
-                                                        CircleShape
-                                                    )
-                                            )
-                                        }
-                                    }
-
-                                    if (backgroundImageUri == null) {
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                    }
-
-                                    // Background Image Section Card
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                            .background(
+                                                MaterialTheme.colorScheme.primaryContainer,
+                                                RoundedCornerShape(24.dp)
+                                            )
+                                            .clickable {
+                                                val encodedColor =
+                                                    selectedColorHex?.let { Uri.encode(it) } ?: ""
+                                                navController.navigate("color_picker?initialColor=$encodedColor")
+                                            }
                                             .padding(horizontal = 24.dp, vertical = 16.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = stringResource(R.string.background_image),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (backgroundImageUri != null) {
-                                                                                                    Text(
-                                                    stringResource(R.string.image_selected),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.clickable {
-                                                        navController.navigate("image_picker")
-                                                    }
+                                        Column {
+                                            Text(
+                                                text = if (backgroundImageUri == null) stringResource(R.string.card_color) else stringResource(R.string.text_color),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Text(
+                                                text = selectedColorHex
+                                                    ?: if (backgroundImageUri == null) {
+                                                        String.format(
+                                                            LocalConfiguration.current.locales[0],
+                                                            "#%06X",
+                                                            (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb())
+                                                        )
+                                                    } else "#FFFFFF",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                                                    alpha = 0.7f
                                                 )
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                IconButton(
-                                                    onClick = {
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .background(
+                                                    selectedColorHex?.let {
                                                         try {
-                                                            backgroundImageUri?.let { uriStr ->
-                                                                val uri = uriStr.toUri()
-                                                                if (uri.scheme == "file") {
-                                                                    val file = File(uri.path ?: return@let)
-                                                                    if (file.exists()) file.delete()
+                                                            Color(it.toColorInt())
+                                                        } catch (_: Exception) {
+                                                            if (backgroundImageUri == null) MaterialTheme.colorScheme.primary else Color.White
+                                                        }
+                                                    } ?: if (backgroundImageUri == null) MaterialTheme.colorScheme.primary else Color.White,
+                                                    CircleShape
+                                                )
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    // Background Image Section Card
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                                            .padding(16.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.background_image),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (backgroundImageUri != null) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            try {
+                                                                backgroundImageUri?.let { uriStr ->
+                                                                    val uri = uriStr.toUri()
+                                                                    if (uri.scheme == "file") {
+                                                                        val file = File(uri.path ?: return@let)
+                                                                        if (file.exists()) file.delete()
+                                                                    }
                                                                 }
-                                                            }
-                                                            widgetImageUri?.let { uriStr ->
-                                                                val uri = uriStr.toUri()
-                                                                if (uri.scheme == "file") {
-                                                                    val file = File(uri.path ?: return@let)
-                                                                    if (file.exists()) file.delete()
+                                                                widgetImageUri?.let { uriStr ->
+                                                                    val uri = uriStr.toUri()
+                                                                    if (uri.scheme == "file") {
+                                                                        val file = File(uri.path ?: return@let)
+                                                                        if (file.exists()) file.delete()
+                                                                    }
                                                                 }
-                                                            }
-                                                        } catch (_: Exception) {}
-                                                        backgroundImageUri = null
-                                                        widgetImageUri = null
-                                                    },
-                                                    modifier = Modifier.size(24.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                                                }
-                                            } else {
-                                                IconButton(
-                                                    onClick = {
-                                                        navController.navigate("image_picker")
-                                                    },
-                                                    modifier = Modifier.size(40.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.AddPhotoAlternate,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                                    )
+                                                            } catch (_: Exception) {}
+                                                            backgroundImageUri = null
+                                                            widgetImageUri = null
+                                                        },
+                                                        modifier = Modifier.size(24.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                                    }
+                                                } else {
+                                                    IconButton(
+                                                        onClick = {
+                                                            navController.navigate("image_picker")
+                                                        },
+                                                        modifier = Modifier.size(40.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.AddPhotoAlternate,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
 
-                                    AnimatedVisibility(
-                                        visible = backgroundImageUri != null,
-                                        enter = fadeIn() + expandVertically(),
-                                        exit = fadeOut() + shrinkVertically()
-                                    ) {
-                                        Column {
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                                                    .padding(horizontal = 24.dp, vertical = 12.dp)
-                                            ) {
-                                                Text(
-                                                    text = stringResource(R.string.background_brightness),
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                )
-                                                Slider(
-                                                    value = backgroundBrightness,
-                                                    onValueChange = { backgroundBrightness = it },
-                                                    valueRange = 0f..1f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
+                                        AnimatedVisibility(
+                                            visible = backgroundImageUri != null,
+                                            enter = fadeIn() + expandVertically(),
+                                            exit = fadeOut() + shrinkVertically()
+                                        ) {
+                                            Column {
                                                 Spacer(modifier = Modifier.height(8.dp))
                                                 HorizontalDivider(
                                                     thickness = 1.dp,
                                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
                                                 )
                                                 Spacer(modifier = Modifier.height(8.dp))
-
-                                                Row(
+                                                Column(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .clickable { 
-                                                            val encodedColor = selectedColorHex?.let { Uri.encode(it) } ?: ""
-                                                            navController.navigate("color_picker?initialColor=$encodedColor")
-                                                        },
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
+                                                        .padding(horizontal = 8.dp)
                                                 ) {
-                                                    Column {
-                                                        Text(
-                                                            text = stringResource(R.string.text_color),
-                                                            style = MaterialTheme.typography.bodyLarge,
-                                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                        )
-                                                        Text(
-                                                            text = selectedColorHex ?: "#FFFFFF",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                                        )
-                                                    }
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(40.dp)
-                                                            .background(
-                                                                selectedColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { Color.White } } ?: Color.White,
-                                                                CircleShape
-                                                            )
+                                                    Text(
+                                                        text = stringResource(R.string.mask_intensity),
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                    Slider(
+                                                        value = backgroundBrightness,
+                                                        onValueChange = { backgroundBrightness = it },
+                                                        valueRange = 0f..1f,
+                                                        modifier = Modifier.fillMaxWidth()
                                                     )
                                                 }
                                             }
@@ -2741,8 +2778,11 @@ fun CountdownItem(
     now: LocalDateTime,
     showActions: Boolean = true,
     onEdit: () -> Unit = {},
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    onCopy: () -> Unit = {}
 ) {
+    var expanded by remember { mutableStateOf(false) }
+    var pressOffset by remember { mutableStateOf(Offset.Zero) }
     val customFontFamily = remember(event.customFontPath) {
         event.customFontPath?.let { path ->
             try {
@@ -2802,7 +2842,18 @@ fun CountdownItem(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { offset ->
+                        if (showActions) {
+                            pressOffset = offset
+                            expanded = true
+                        }
+                    }
+                )
+            },
         shape = RoundedCornerShape(28.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
@@ -2810,6 +2861,44 @@ fun CountdownItem(
         )
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
+            // Invisible anchor for the dropdown menu at the press position
+            Box(
+                modifier = Modifier
+                    .offset { 
+                        IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) 
+                    }
+                    .size(0.dp)
+            ) {
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.edit_card)) },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) },
+                        onClick = {
+                            expanded = false
+                            onEdit()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.copy)) },
+                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        onClick = {
+                            expanded = false
+                            onCopy()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.delete)) },
+                        leadingIcon = { Icon(Icons.Default.Delete, null) },
+                        onClick = {
+                            expanded = false
+                            onDelete()
+                        }
+                    )
+                }
+            }
             if (event.backgroundImageUri != null) {
                 AsyncImage(
                     model = event.backgroundImageUri,
@@ -2845,17 +2934,6 @@ fun CountdownItem(
                         color = titleColor.copy(alpha = 0.7f),
                         fontFamily = customFontFamily
                     )
-                }
-                if (showActions) {
-                    Row {
-                        IconButton(onClick = onEdit, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Default.Edit, stringResource(R.string.edit_card), tint = titleColor.copy(alpha = 0.6f))
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Default.Delete, stringResource(R.string.delete), tint = titleColor.copy(alpha = 0.6f))
-                        }
-                    }
                 }
             }
 
@@ -3015,8 +3093,11 @@ fun SmallCountdownItem(
     now: LocalDateTime,
     showActions: Boolean = true,
     onEdit: () -> Unit = {},
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    onCopy: () -> Unit = {}
 ) {
+    var expanded by remember { mutableStateOf(false) }
+    var pressOffset by remember { mutableStateOf(Offset.Zero) }
     val customFontFamily = remember(event.customFontPath) {
         event.customFontPath?.let { path ->
             try {
@@ -3072,7 +3153,19 @@ fun SmallCountdownItem(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { offset ->
+                        if (showActions) {
+                            pressOffset = offset
+                            expanded = true
+                        }
+                    }
+                )
+            },
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
@@ -3080,6 +3173,44 @@ fun SmallCountdownItem(
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            // Invisible anchor for the dropdown menu at the press position
+            Box(
+                modifier = Modifier
+                    .offset { 
+                        IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) 
+                    }
+                    .size(0.dp)
+            ) {
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.edit_card)) },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) },
+                        onClick = {
+                            expanded = false
+                            onEdit()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.copy)) },
+                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        onClick = {
+                            expanded = false
+                            onCopy()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.delete)) },
+                        leadingIcon = { Icon(Icons.Default.Delete, null) },
+                        onClick = {
+                            expanded = false
+                            onDelete()
+                        }
+                    )
+                }
+            }
             if (event.widgetImageUri != null) {
                 AsyncImage(
                     model = event.widgetImageUri,
@@ -3125,13 +3256,6 @@ fun SmallCountdownItem(
                             overflow = TextOverflow.Ellipsis,
                             fontFamily = customFontFamily
                         )
-                    }
-                    if (showActions) {
-                        Row {
-                            Icon(Icons.Default.Edit, stringResource(R.string.edit_card), modifier = Modifier.size(16.dp).clickable { onEdit() }, tint = titleColor.copy(alpha = 0.6f))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(Icons.Default.Delete, stringResource(R.string.delete), modifier = Modifier.size(16.dp).clickable { onDelete() }, tint = titleColor.copy(alpha = 0.6f))
-                        }
                     }
                 }
 
