@@ -205,11 +205,13 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
                 }
 
                 // Back Button
-                IconButton(
-                    onClick = { navController.popBackStack() },
+                Box(
                     modifier = Modifier
-                        .background(boxColor, RoundedCornerShape(12.dp))
                         .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(boxColor)
+                        .clickable { navController.popBackStack() },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -229,11 +231,13 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = { filePickerLauncher.launch(arrayOf("image/*")) },
+                Box(
                     modifier = Modifier
-                        .background(boxColor, RoundedCornerShape(16.dp))
                         .size(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(boxColor)
+                        .clickable { filePickerLauncher.launch(arrayOf("image/*")) },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
@@ -244,12 +248,13 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
                 }
 
                 // Confirm Button
-                IconButton(
-                    onClick = { selectedImage?.let { onImageSelected(it) } },
-                    enabled = selectedImage != null,
+                Box(
                     modifier = Modifier
-                        .background(if (selectedImage != null) boxColor else boxColor.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
                         .size(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (selectedImage != null) boxColor else boxColor.copy(alpha = 0.5f))
+                        .clickable(enabled = selectedImage != null) { selectedImage?.let { onImageSelected(it) } },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,

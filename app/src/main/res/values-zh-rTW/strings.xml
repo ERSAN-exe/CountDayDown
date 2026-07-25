@@ -73,7 +73,7 @@
     <string name="rgb_edit">RGB 調色</string>
     <string name="hex_edit">HEX 調色</string>
     <string name="past">已過去</string>
-    <string name="version_text">版本 v1.4.1</string>
+    <string name="version_text">版本 v1.4.2</string>
     <string name="saved_fonts">已添加的字體</string>
     <string name="create_card">創建新倒計時卡片</string>
     <string name="edit_card">編輯</string>
@@ -82,7 +82,7 @@
     <string name="sort">排序</string>
     <string name="back">返回</string>
     <string name="app_desc">一個輕量化的簡單倒數日應用</string>
-    <string name="made_by">鈴一貳叁製作</string>
+    <string name="made_by">鈴一貳叁</string>
     <string name="notif_disabled_msg">已禁用通知</string>
     <string name="notif_permission_msg">請在設置中開啟通知權限</string>
     <string name="go_to_settings">去開啟</string>
@@ -100,8 +100,10 @@
     <string name="notif_1d">還有 1 天到來</string>
     <string name="notif_soon">即將到來</string>
     <string name="my_events">我的活動</string>
-    <string name="sort_by_time">按距離現在的時間排序</string>
-    <string name="sort_by_creation">按創建日期排序</string>
+    <string name="sort_by_time">按距離現在的時間</string>
+    <string name="sort_by_creation">按創建日期</string>
+    <string name="sort_ascending">升序</string>
+    <string name="sort_descending">降序</string>
     <string name="timezone">時區</string>
     <string name="network_time">網絡時間</string>
     <string name="app_theme_color">主題色</string>
@@ -118,8 +120,11 @@
     <string name="image_color">圖片與顏色</string>
     <string name="reminder_repeat">提醒與循環</string>
     <string name="edit">編輯</string>
+    <string name="share">匯出為圖片</string>
     <string name="copy">複製</string>
     <string name="copy_suffix">_副本</string>
+    <string name="share_success">已保存到相簿</string>
+    <string name="share_error">保存失敗: %1$s</string>
     <string name="export_success">匯出成功</string>
     <string name="import_success">匯入成功</string>
     <string name="notif_format">“%1$s”%2$s</string>

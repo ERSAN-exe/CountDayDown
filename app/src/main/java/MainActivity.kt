@@ -81,6 +81,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.util.lerp
 import kotlin.math.absoluteValue
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -119,9 +120,14 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import android.content.ContentValues
+import android.provider.MediaStore
 import com.Zero23.countdown.data.BackupData
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 
@@ -297,7 +303,7 @@ class MainActivity : ComponentActivity() {
                             }
                         ) { backStackEntry ->
                             val eventId = backStackEntry.arguments?.getString("eventId")
-                            AddEditScreen(navController, dataManager, eventId, backStackEntry)
+                            AddEditScreen(navController, dataManager, eventId, backStackEntry, isDarkTheme)
                         }
                         composable(
                             "color_picker?initialColor={initialColor}",
@@ -376,51 +382,53 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
     var eventToDelete by remember { mutableStateOf<CountdownEvent?>(null) }
 
     val copySuffix = stringResource(R.string.copy_suffix)
-    val onCopy: (CountdownEvent) -> Unit = { event ->
-        scope.launch(Dispatchers.IO) {
-            val currentEvents = dataManager.events.first()
+    val onCopy: (CountdownEvent) -> Unit = remember(copySuffix) {
+        { event ->
+            scope.launch(Dispatchers.IO) {
+                val currentEvents = dataManager.events.first()
 
-            var newBgUri = event.backgroundImageUri
-            var newWidgetUri = event.widgetImageUri
+                var newBgUri = event.backgroundImageUri
+                var newWidgetUri = event.widgetImageUri
 
-            // Try to copy image files to avoid broken links on deletion
-            try {
-                event.backgroundImageUri?.let { uriStr ->
-                    val uri = uriStr.toUri()
-                    if (uri.scheme == "file") {
-                        val oldFile = File(uri.path!!)
-                        if (oldFile.exists()) {
-                            val newFile = File(context.filesDir, "bg_${UUID.randomUUID()}.jpg")
-                            oldFile.copyTo(newFile)
-                            newBgUri = Uri.fromFile(newFile).toString()
+                // Try to copy image files to avoid broken links on deletion
+                try {
+                    event.backgroundImageUri?.let { uriStr ->
+                        val uri = uriStr.toUri()
+                        if (uri.scheme == "file") {
+                            val oldFile = File(uri.path!!)
+                            if (oldFile.exists()) {
+                                val newFile = File(context.filesDir, "bg_${UUID.randomUUID()}.jpg")
+                                oldFile.copyTo(newFile)
+                                newBgUri = Uri.fromFile(newFile).toString()
+                            }
                         }
                     }
-                }
-                event.widgetImageUri?.let { uriStr ->
-                    val uri = uriStr.toUri()
-                    if (uri.scheme == "file") {
-                        val oldFile = File(uri.path!!)
-                        if (oldFile.exists()) {
-                            val newFile = File(context.filesDir, "widget_${UUID.randomUUID()}.jpg")
-                            oldFile.copyTo(newFile)
-                            newWidgetUri = Uri.fromFile(newFile).toString()
+                    event.widgetImageUri?.let { uriStr ->
+                        val uri = uriStr.toUri()
+                        if (uri.scheme == "file") {
+                            val oldFile = File(uri.path!!)
+                            if (oldFile.exists()) {
+                                val newFile = File(context.filesDir, "widget_${UUID.randomUUID()}.jpg")
+                                oldFile.copyTo(newFile)
+                                newWidgetUri = Uri.fromFile(newFile).toString()
+                            }
                         }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
 
-            val newEvent = event.copy(
-                id = UUID.randomUUID().toString(),
-                name = "${event.name}$copySuffix",
-                backgroundImageUri = newBgUri,
-                widgetImageUri = newWidgetUri,
-                createdAt = System.currentTimeMillis()
-            )
+                val newEvent = event.copy(
+                    id = UUID.randomUUID().toString(),
+                    name = "${event.name}$copySuffix",
+                    backgroundImageUri = newBgUri,
+                    widgetImageUri = newWidgetUri,
+                    createdAt = System.currentTimeMillis()
+                )
 
-            withContext(Dispatchers.Main) {
-                dataManager.saveEvents(currentEvents + newEvent)
+                withContext(Dispatchers.Main) {
+                    dataManager.saveEvents(currentEvents + newEvent)
+                }
             }
         }
     }
@@ -468,7 +476,7 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
     LaunchedEffect(Unit) {
         while (true) {
             fetchTime()
-            delay(5.minutes) // 每5分钟同步一次
+            delay(5.minutes)
         }
     }
 
@@ -479,9 +487,13 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate("add_edit") },
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.create_card), tint = Color.White)
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.create_card),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             }
         }
     ) { innerPadding ->
@@ -503,7 +515,7 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                 ) {
                     Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 20.sp)
                     Text(
-                        text = if (isSyncingGlobal) stringResource(R.string.syncing) else "${stringResource(R.string.current_time)}${currentTick.format(formatter)}",
+                        text = "${stringResource(R.string.current_time)}${currentTick.format(formatter)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                         maxLines = 1,
@@ -511,15 +523,17 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                     )
                 }
 
-                IconButton(
-                    onClick = {
-                        if (navController.currentDestination?.route == "home") {
-                            navController.navigate("settings")
-                        }
-                    },
+                Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
                         .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable {
+                            if (navController.currentDestination?.route == "home") {
+                                navController.navigate("settings")
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
@@ -538,9 +552,10 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                     // Switch Button
                     Box(
                         modifier = Modifier
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(20.dp))
                             .width(88.dp)
                             .height(40.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
                             .clickable { scope.launch { dataManager.setIsGridView(!isGridView) } }
                             .padding(4.dp)
                     ) {
@@ -660,11 +675,10 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Icon(
-                            imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                        Text(
+                            text = if (sortAscending) stringResource(R.string.sort_ascending) else stringResource(R.string.sort_descending),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -1023,15 +1037,17 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                     )
                 }
                 
-                IconButton(
-                    onClick = {
-                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
-                        }
-                    },
+                Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
                         .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable {
+                            if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -1082,7 +1098,8 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                     
                     Box(
                         modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surface)
                             .clickable { isThemeMenuExpanded = true }
                     ) {
                         Text(
@@ -1171,9 +1188,9 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(
-                                    themeColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { MaterialTheme.colorScheme.primary } } ?: MaterialTheme.colorScheme.primary,
-                                    RoundedCornerShape(12.dp)
+                                    themeColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { MaterialTheme.colorScheme.primary } } ?: MaterialTheme.colorScheme.primary
                                 )
                                 .clickable {
                                     val encodedColor = themeColorHex?.let { Uri.encode(it) } ?: ""
@@ -1413,7 +1430,8 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surface)
                             .clickable { navController.navigate("changelog") }
                             .padding(horizontal = 24.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -1437,7 +1455,8 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surface)
                             .clickable {
                                 val intent = Intent(Intent.ACTION_VIEW, "https://github.com/ERSAN-exe/CountDayDown".toUri())
                                 context.startActivity(intent)
@@ -1465,7 +1484,8 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surface)
                             .clickable {
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
                                     data = "mailto:ZErO23_FeedBack@outlook.com".toUri()
@@ -1560,15 +1580,17 @@ fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
                     )
                 }
                 
-                IconButton(
-                    onClick = {
-                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
-                        }
-                    },
+                Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
                         .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable {
+                            if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -1592,7 +1614,7 @@ fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddEditScreen(navController: NavController, dataManager: DataManager, eventId: String?, backStackEntry: androidx.navigation.NavBackStackEntry) {
+fun AddEditScreen(navController: NavController, dataManager: DataManager, eventId: String?, backStackEntry: androidx.navigation.NavBackStackEntry, isDark: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val events by dataManager.events.collectAsState(initial = emptyList())
@@ -1679,10 +1701,12 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     var cropOriginalUri by remember { mutableStateOf<Uri?>(null) }
 
     // Initialization logic from Database
+    val currentPrimary = MaterialTheme.colorScheme.primary
     LaunchedEffect(initialEvent) {
         if (!isInitialized) {
             if (eventId == null) {
-                // New event: defaults are already set
+                // New event: set default color from current theme to make it static
+                selectedColorHex = String.format("#%06X", (0xFFFFFF and currentPrimary.toArgb()))
                 isInitialized = true
             } else if (initialEvent != null) {
                 // Edit event: load from initialEvent
@@ -1890,15 +1914,17 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     )
                 }
                 
-                IconButton(
-                    onClick = {
-                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
-                        }
-                    },
+                Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
                         .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable {
+                            if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -1932,7 +1958,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                             }
                             .size(width = 56.dp, height = 48.dp)
                             .background(
-                                if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f)
+                                if (isDark) Color.White.copy(alpha = 0.08f)
                                 else Color.White,
                                 RoundedCornerShape(20.dp)
                             )
@@ -1959,7 +1985,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     imageVector = icon,
                                     contentDescription = null,
                                     tint = if (isSelected) {
-                                        if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.primary
+                                        if (isDark) Color.White else MaterialTheme.colorScheme.primary
                                     } else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
                                     modifier = Modifier.size(24.dp)
                                 )
@@ -1969,11 +1995,13 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 }
 
                 // Save Button
-                IconButton(
-                    onClick = onSave,
+                Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
                         .size(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable { onSave() },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
@@ -2536,15 +2564,17 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                 value = reminderOptions.find { it.first == reminderMinutes }?.second ?: stringResource(R.string.no_reminder),
                                                 onValueChange = {},
                                                 readOnly = true,
+                                                enabled = false,
                                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isReminderMenuExpanded) },
                                                 modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
                                                 label = { Text(stringResource(R.string.reminder_time)) },
-                                                enabled = isNotificationPartEnabled,
                                                 shape = RoundedCornerShape(24.dp),
                                                 colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                    disabledContainerColor = MaterialTheme.colorScheme.surface
+                                                    disabledContainerColor = MaterialTheme.colorScheme.surface,
+                                                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             )
                                             ExposedDropdownMenu(
@@ -2612,13 +2642,15 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                 value = repeatOptions.find { it.first == repeatType }?.second ?: stringResource(R.string.repeat_none),
                                                 onValueChange = {},
                                                 readOnly = true,
+                                                enabled = false,
                                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatMenuExpanded) },
                                                 modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
                                                 shape = RoundedCornerShape(24.dp),
                                                 colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                    disabledContainerColor = MaterialTheme.colorScheme.surface
+                                                    disabledContainerColor = MaterialTheme.colorScheme.surface,
+                                                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             )
                                             ExposedDropdownMenu(
@@ -2667,14 +2699,17 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                             value = repeatUnits.find { it.first == repeatUnit }?.second ?: stringResource(R.string.unit_days),
                                                             onValueChange = {},
                                                             readOnly = true,
+                                                            enabled = false,
                                                             label = { Text(stringResource(R.string.repeat_unit)) },
                                                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isRepeatUnitMenuExpanded) },
                                                             modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
                                                             shape = RoundedCornerShape(24.dp),
                                                             colors = OutlinedTextFieldDefaults.colors(
-                                                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                                disabledContainerColor = MaterialTheme.colorScheme.surface
+                                                                disabledContainerColor = MaterialTheme.colorScheme.surface,
+                                                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                                                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                                                             )
                                                         )
                                                         ExposedDropdownMenu(
@@ -2781,6 +2816,10 @@ fun CountdownItem(
     onDelete: () -> Unit = {},
     onCopy: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val graphicsLayer = rememberGraphicsLayer()
+    var isExporting by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var pressOffset by remember { mutableStateOf(Offset.Zero) }
     val customFontFamily = remember(event.customFontPath) {
@@ -2801,24 +2840,14 @@ fun CountdownItem(
         }
     }
 
-    // Calculate the next occurrence if it's a recurring event and passed
     val target = event.calculateTarget(now)
-
     var duration = Duration.between(now, target)
-    
-    // Adjust duration by subtracting excluded days
     if (!event.excludedDays.isNullOrEmpty()) {
         val excludedCount = event.countExcludedDaysBetween(now, target)
-        duration = if (duration.isNegative) {
-            duration.plus(Duration.ofDays(excludedCount))
-        } else {
-            duration.minus(Duration.ofDays(excludedCount))
-        }
+        duration = if (duration.isNegative) duration.plus(Duration.ofDays(excludedCount)) else duration.minus(Duration.ofDays(excludedCount))
     }
 
-    val isPast = duration.isNegative
     val absDuration = duration.abs()
-
     val days = absDuration.toDays()
     val hours = absDuration.toHours() % 24
     val minutes = absDuration.toMinutes() % 60
@@ -2826,24 +2855,28 @@ fun CountdownItem(
 
     val customColor = event.colorHex?.let { try { Color(it.toColorInt()) } catch(_:Exception) { null } }
     val baseColor = customColor ?: MaterialTheme.colorScheme.primary
-    
-    // Solid background with rounded corners or Image
     val hasImage = event.backgroundImageUri != null
     val cardBgColor = if (hasImage) Color.Black else baseColor
     val titleColor = if (hasImage) (customColor ?: Color.White) else {
-        // If it's a solid background, check if the color is light or dark
         val luminance = baseColor.red * 0.299f + baseColor.green * 0.587f + baseColor.blue * 0.114f
         if (luminance > 0.6f) Color.Black else Color.White
     }
     val numberColor = if (hasImage) (customColor ?: Color.White).copy(alpha = 0.9f) else {
-        // For numbers, we can also use contrast
         val luminance = baseColor.red * 0.299f + baseColor.green * 0.587f + baseColor.blue * 0.114f
         if (luminance > 0.6f) Color.Black.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.8f)
     }
 
+    val shareErrorMsg = stringResource(R.string.share_error)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .drawWithContent {
+                graphicsLayer.record {
+                    this@drawWithContent.drawContent()
+                }
+                drawLayer(graphicsLayer)
+            }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onLongPress = { offset ->
@@ -2856,235 +2889,101 @@ fun CountdownItem(
             },
         shape = RoundedCornerShape(28.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = cardBgColor,
-        )
+        colors = CardDefaults.cardColors(containerColor = cardBgColor)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            // Invisible anchor for the dropdown menu at the press position
-            Box(
-                modifier = Modifier
-                    .offset { 
-                        IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) 
-                    }
-                    .size(0.dp)
-            ) {
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
+            Box(modifier = Modifier.offset { IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) }.size(0.dp)) {
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.edit_card)) },
                         leadingIcon = { Icon(Icons.Default.Edit, null) },
-                        onClick = {
-                            expanded = false
-                            onEdit()
-                        }
+                        onClick = { expanded = false; onEdit() }
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.copy)) },
                         leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        onClick = { expanded = false; onCopy() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.share)) },
+                        leadingIcon = { Icon(Icons.Default.Share, null) },
                         onClick = {
                             expanded = false
-                            onCopy()
+                            scope.launch {
+                                try {
+                                    isExporting = true
+                                    delay(100.milliseconds)
+                                    val bitmap = graphicsLayer.toImageBitmap()
+                                    saveEventAsImage(context, bitmap)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, shareErrorMsg.format(e.message), Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isExporting = false
+                                }
+                            }
                         }
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.delete)) },
                         leadingIcon = { Icon(Icons.Default.Delete, null) },
-                        onClick = {
-                            expanded = false
-                            onDelete()
-                        }
+                        onClick = { expanded = false; onDelete() }
                     )
                 }
             }
             if (event.backgroundImageUri != null) {
-                AsyncImage(
-                    model = event.backgroundImageUri,
-                    contentDescription = null,
-                    modifier = Modifier.matchParentSize(),
-                    contentScale = ContentScale.Crop
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(Color.Black.copy(alpha = event.backgroundBrightness))
-                ) {}
+                AsyncImage(model = event.backgroundImageUri, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = event.backgroundBrightness))) {}
             }
-            Column(
-                modifier = Modifier.padding(24.dp).fillMaxWidth()
-            ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = event.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = titleColor,
-                        fontFamily = customFontFamily
-                    )
-                    Text(
-                        text = "${stringResource(R.string.target)}${target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = titleColor.copy(alpha = 0.7f),
-                        fontFamily = customFontFamily
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Column {
-                if (isPast) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        val (value, unit) = when {
-                            kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
-                            kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
-                            else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
-                        }
-                        Text(
-                            text = value,
-                            fontSize = 56.sp,
-                            fontWeight = FontWeight.Black,
-                            color = numberColor,
-                            lineHeight = 56.sp,
-                            fontFamily = customFontFamily
-                        )
-                        Text(
-                            text = unit + stringResource(R.string.ago_suffix),
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = numberColor,
-                            modifier = Modifier.padding(bottom = 6.dp, start = 2.dp),
-                            fontFamily = customFontFamily
-                        )
+            Column(modifier = Modifier.padding(24.dp).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = event.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = titleColor, fontFamily = customFontFamily)
+                        Text(text = "${stringResource(R.string.target)}${target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))}", style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
                     }
-                } else {
-                    // Combined single row for future events
-                    Row(
-                        verticalAlignment = Alignment.Bottom,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // Days
-                        Text(
-                            text = days.toString(),
-                            fontSize = 56.sp,
-                            fontWeight = FontWeight.Black,
-                            color = numberColor,
-                            lineHeight = 56.sp,
-                            fontFamily = customFontFamily
-                        )
-                        Text(
-                            text = stringResource(R.string.unit_days),
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = numberColor,
-                            modifier = Modifier.padding(bottom = 6.dp, start = 2.dp),
-                            fontFamily = customFontFamily
-                        )
-                        
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        // Hours and Minutes
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 8.dp) // Align slightly better with the large text
-                        ) {
-                            Text(
-                                text = hours.toString(),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = numberColor,
-                                fontFamily = customFontFamily
-                            )
-                            Text(
-                                text = stringResource(R.string.unit_hours),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = numberColor,
-                                modifier = Modifier.padding(start = 2.dp, end = 8.dp),
-                                fontFamily = customFontFamily
-                            )
-                            Text(
-                                text = minutes.toString(),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = numberColor,
-                                fontFamily = customFontFamily
-                            )
-                            Text(
-                                text = stringResource(R.string.unit_minutes),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = numberColor,
-                                modifier = Modifier.padding(start = 2.dp, end = 8.dp),
-                                fontFamily = customFontFamily
-                            )
-                            if (days == 0L && hours == 0L) {
-                                Text(
-                                    text = seconds.toString(),
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = numberColor,
-                                    fontFamily = customFontFamily
-                                )
-                                Text(
-                                    text = stringResource(R.string.unit_seconds),
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = numberColor,
-                                    modifier = Modifier.padding(start = 2.dp),
-                                    fontFamily = customFontFamily
-                                )
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+                Column {
+                    if (duration.isNegative) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            val (value, unit) = when {
+                                kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
+                                kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
+                                else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
+                            }
+                            Text(text = value, fontSize = 56.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 56.sp, fontFamily = customFontFamily)
+                            Text(text = unit + stringResource(R.string.ago_suffix), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp), fontFamily = customFontFamily)
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
+                            Text(text = days.toString(), fontSize = 56.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 56.sp, fontFamily = customFontFamily)
+                            Text(text = stringResource(R.string.unit_days), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp), fontFamily = customFontFamily)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                                Text(text = hours.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
+                                Text(text = stringResource(R.string.unit_hours), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp, end = 8.dp), fontFamily = customFontFamily)
+                                Text(text = minutes.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
+                                Text(text = stringResource(R.string.unit_minutes), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp, end = 8.dp), fontFamily = customFontFamily)
+                                if (days == 0L && hours == 0L) {
+                                    Text(text = seconds.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
+                                    Text(text = stringResource(R.string.unit_seconds), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp), fontFamily = customFontFamily)
+                                }
                             }
                         }
                     }
                 }
             }
-
-            if (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none")) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!isExporting && (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none"))) {
+                Row(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (event.reminderMinutesBefore != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Notifications,
-                                null,
-                                tint = titleColor.copy(alpha = 0.7f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = " ${stringResource(R.string.reminder_enabled)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = titleColor.copy(alpha = 0.7f)
-                            )
-                        }
+                        Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                     }
                     if (event.repeatType != null && event.repeatType != "none") {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Repeat,
-                                null,
-                                tint = titleColor.copy(alpha = 0.7f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = " ${stringResource(R.string.repeat_enabled)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = titleColor.copy(alpha = 0.7f)
-                            )
-                        }
+                        Icon(imageVector = Icons.Default.Repeat, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                     }
                 }
             }
         }
     }
-}
 }
 
 @Composable
@@ -3096,6 +2995,10 @@ fun SmallCountdownItem(
     onDelete: () -> Unit = {},
     onCopy: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val graphicsLayer = rememberGraphicsLayer()
+    var isExporting by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var pressOffset by remember { mutableStateOf(Offset.Zero) }
     val customFontFamily = remember(event.customFontPath) {
@@ -3117,22 +3020,13 @@ fun SmallCountdownItem(
     }
 
     val target = event.calculateTarget(now)
-
     var duration = Duration.between(now, target)
-
-    // Adjust duration by subtracting excluded days
     if (!event.excludedDays.isNullOrEmpty()) {
         val excludedCount = event.countExcludedDaysBetween(now, target)
-        duration = if (duration.isNegative) {
-            duration.plus(Duration.ofDays(excludedCount))
-        } else {
-            duration.minus(Duration.ofDays(excludedCount))
-        }
+        duration = if (duration.isNegative) duration.plus(Duration.ofDays(excludedCount)) else duration.minus(Duration.ofDays(excludedCount))
     }
 
-    val isPast = duration.isNegative
     val absDuration = duration.abs()
-
     val days = absDuration.toDays()
     val hours = absDuration.toHours() % 24
     val minutes = absDuration.toMinutes() % 60
@@ -3140,7 +3034,6 @@ fun SmallCountdownItem(
 
     val customColor = event.colorHex?.let { try { Color(it.toColorInt()) } catch(_:Exception) { null } }
     val baseColor = customColor ?: MaterialTheme.colorScheme.primary
-    
     val hasImage = event.widgetImageUri != null
     val cardBgColor = if (hasImage) Color.Black else baseColor
     val titleColor = if (hasImage) (customColor ?: Color.White) else {
@@ -3152,10 +3045,18 @@ fun SmallCountdownItem(
         if (luminance > 0.6f) Color.Black.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.8f)
     }
 
+    val shareErrorMsg = stringResource(R.string.share_error)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
+            .drawWithContent {
+                graphicsLayer.record {
+                    this@drawWithContent.drawContent()
+                }
+                drawLayer(graphicsLayer)
+            }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onLongPress = { offset ->
@@ -3168,144 +3069,77 @@ fun SmallCountdownItem(
             },
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = cardBgColor,
-        )
+        colors = CardDefaults.cardColors(containerColor = cardBgColor)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Invisible anchor for the dropdown menu at the press position
-            Box(
-                modifier = Modifier
-                    .offset { 
-                        IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) 
-                    }
-                    .size(0.dp)
-            ) {
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
+            Box(modifier = Modifier.offset { IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) }.size(0.dp)) {
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.edit_card)) },
                         leadingIcon = { Icon(Icons.Default.Edit, null) },
-                        onClick = {
-                            expanded = false
-                            onEdit()
-                        }
+                        onClick = { expanded = false; onEdit() }
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.copy)) },
                         leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        onClick = { expanded = false; onCopy() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.share)) },
+                        leadingIcon = { Icon(Icons.Default.Share, null) },
                         onClick = {
                             expanded = false
-                            onCopy()
+                            scope.launch {
+                                try {
+                                    isExporting = true
+                                    delay(100.milliseconds)
+                                    val bitmap = graphicsLayer.toImageBitmap()
+                                    saveEventAsImage(context, bitmap)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, shareErrorMsg.format(e.message), Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isExporting = false
+                                }
+                            }
                         }
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.delete)) },
                         leadingIcon = { Icon(Icons.Default.Delete, null) },
-                        onClick = {
-                            expanded = false
-                            onDelete()
-                        }
+                        onClick = { expanded = false; onDelete() }
                     )
                 }
             }
             if (event.widgetImageUri != null) {
-                AsyncImage(
-                    model = event.widgetImageUri,
-                    contentDescription = null,
-                    modifier = Modifier.matchParentSize(),
-                    contentScale = ContentScale.Crop
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(Color.Black.copy(alpha = event.backgroundBrightness))
-                ) {}
+                AsyncImage(model = event.widgetImageUri, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = event.backgroundBrightness))) {}
             }
-            Column(
-                modifier = Modifier.padding(16.dp).fillMaxSize()
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = event.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = titleColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontFamily = customFontFamily
-                        )
-                        Text(
-                            text = stringResource(R.string.target),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = titleColor.copy(alpha = 0.7f),
-                            fontFamily = customFontFamily
-                        )
-                        Text(
-                            text = target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = titleColor.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontFamily = customFontFamily
-                        )
+                        Text(text = event.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = titleColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = customFontFamily)
+                        Text(text = stringResource(R.string.target), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
+                        Text(text = target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = customFontFamily)
                     }
                 }
-
                 Spacer(modifier = Modifier.weight(1f))
-
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.align(Alignment.BottomStart)) {
-                        if (isPast) {
+                        if (duration.isNegative) {
                             val (value, unit) = when {
                                 kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
                                 kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
                                 else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
                             }
                             Row(verticalAlignment = Alignment.Bottom) {
-                                Text(
-                                    text = value,
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = numberColor,
-                                    lineHeight = 32.sp,
-                                    fontFamily = customFontFamily
-                                )
-                                Text(
-                                    text = unit + stringResource(R.string.ago_suffix),
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = numberColor,
-                                    modifier = Modifier.padding(bottom = 4.dp, start = 2.dp),
-                                    fontFamily = customFontFamily
-                                )
+                                Text(text = value, fontSize = 32.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 32.sp, fontFamily = customFontFamily)
+                                Text(text = unit + stringResource(R.string.ago_suffix), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
                             }
                         } else {
                             if (days > 0) {
                                 Row(verticalAlignment = Alignment.Bottom) {
-                                    Text(
-                                        text = days.toString(),
-                                        fontSize = 36.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = numberColor,
-                                        lineHeight = 36.sp,
-                                        fontFamily = customFontFamily
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.unit_days),
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = numberColor,
-                                        modifier = Modifier.padding(bottom = 4.dp, start = 2.dp),
-                                        fontFamily = customFontFamily
-                                    )
+                                    Text(text = days.toString(), fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
+                                    Text(text = stringResource(R.string.unit_days), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
                                 }
                             } else {
                                 val timeText = when {
@@ -3313,39 +3147,17 @@ fun SmallCountdownItem(
                                     minutes > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", minutes, seconds)
                                     else -> String.format(LocalConfiguration.current.locales[0], "%02d", seconds)
                                 }
-                                Text(
-                                    text = timeText,
-                                    fontSize = 36.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = numberColor,
-                                    lineHeight = 36.sp,
-                                    fontFamily = customFontFamily
-                                )
+                                Text(text = timeText, fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
                             }
                         }
                     }
-
-                    if (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none")) {
-                        Row(
-                            modifier = Modifier.align(Alignment.BottomEnd),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    if (!isExporting && (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none"))) {
+                        Row(modifier = Modifier.align(Alignment.BottomEnd), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (event.reminderMinutesBefore != null) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
-                                    contentDescription = null,
-                                    tint = titleColor.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(14.dp)
-                                )
+                                Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
                             }
                             if (event.repeatType != null && event.repeatType != "none") {
-                                Icon(
-                                    imageVector = Icons.Default.Repeat,
-                                    contentDescription = null,
-                                    tint = titleColor.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(14.dp)
-                                )
+                                Icon(imageVector = Icons.Default.Repeat, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
                             }
                         }
                     }
@@ -3704,6 +3516,56 @@ fun ImageCropOverlay(
                 modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp)).size(56.dp)
             ) {
                 Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(28.dp))
+            }
+        }
+    }
+}
+
+private suspend fun saveEventAsImage(context: Context, cardBitmap: ImageBitmap) {
+    withContext(Dispatchers.IO) {
+        try {
+            val padding = 120
+            val outW = cardBitmap.width + padding * 2
+            val outH = cardBitmap.height + padding * 2
+
+            val androidBitmap = cardBitmap.asAndroidBitmap()
+            // Ensure we are working with a software bitmap to avoid "Software rendering doesn't support hardware bitmaps"
+            val softwareBitmap = androidBitmap.copy(Bitmap.Config.ARGB_8888, false)
+
+            val bitmap = createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            canvas.drawBitmap(softwareBitmap, padding.toFloat(), padding.toFloat(), null)
+            softwareBitmap.recycle()
+
+            val fileName = "CountDown_${System.currentTimeMillis()}.png"
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/CountDown")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            
+            if (uri != null) {
+                resolver.openOutputStream(uri)?.use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+                contentValues.clear()
+                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                resolver.update(uri, contentValues, null, null)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, context.getString(R.string.share_success), Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                throw Exception("Failed to create MediaStore entry")
+            }
+            bitmap.recycle()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, context.getString(R.string.share_error, e.message), Toast.LENGTH_LONG).show()
             }
         }
     }
