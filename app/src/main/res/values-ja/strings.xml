@@ -73,7 +73,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.4.1</string>
+    <string name="version_text">バージョン v1.4.2</string>
     <string name="saved_fonts">追加されたフォント</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
@@ -82,7 +82,7 @@
     <string name="sort">ソート</string>
     <string name="back">戻る</string>
     <string name="app_desc">シンプルで軽量なカウントダウンアプリ</string>
-    <string name="made_by">铃一贰叁制作</string>
+    <string name="made_by">铃一贰叁</string>
     <string name="notif_disabled_msg">通知が無効です</string>
     <string name="notif_permission_msg">設定で通知権限を有効にしてください</string>
     <string name="go_to_settings">設定へ</string>
@@ -100,8 +100,10 @@
     <string name="notif_1d">あと1日です</string>
     <string name="notif_soon">まもなくです</string>
     <string name="my_events">マイ・アクティビティ</string>
-    <string name="sort_by_time">現在からの時間でソート</string>
-    <string name="sort_by_creation">作成日でソート</string>
+    <string name="sort_by_time">現在からの時間</string>
+    <string name="sort_by_creation">作成日</string>
+    <string name="sort_ascending">昇順</string>
+    <string name="sort_descending">降順</string>
     <string name="timezone">タイムゾーン</string>
     <string name="network_time">ネットワーク時間</string>
     <string name="app_theme_color">テーマカラー</string>
@@ -118,8 +120,11 @@
     <string name="image_color">画像と色</string>
     <string name="reminder_repeat">リマインダーと繰り返し</string>
     <string name="edit">編集</string>
+    <string name="share">画像として書き出し</string>
     <string name="copy">コピー</string>
     <string name="copy_suffix">_コピー</string>
+    <string name="share_success">アルバムに保存しました</string>
+    <string name="share_error">保存に失敗しました: %1$s</string>
     <string name="export_success">エクスポートに成功しました</string>
     <string name="import_success">インポートに成功しました</string>
     <string name="notif_format">「%1$s」%2$s</string>

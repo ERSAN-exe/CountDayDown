@@ -73,7 +73,7 @@
     <string name="rgb_edit">RGB 편집</string>
     <string name="hex_edit">HEX 편집</string>
     <string name="past">경과</string>
-    <string name="version_text">버전 v1.4.1</string>
+    <string name="version_text">버전 v1.4.2</string>
     <string name="saved_fonts">추가된 글꼴</string>
     <string name="create_card">새 카드 생성</string>
     <string name="edit_card">편집</string>
@@ -82,7 +82,7 @@
     <string name="sort">정렬</string>
     <string name="back">뒤로</string>
     <string name="app_desc">간편하고 가벼운 카운트다운 앱</string>
-    <string name="made_by">铃一贰叁 제작</string>
+    <string name="made_by">铃一贰叁</string>
     <string name="notif_disabled_msg">알림이 비활성화됨</string>
     <string name="notif_permission_msg">설정에서 알림 권한을 허용해주세요</string>
     <string name="go_to_settings">설정으로 이동</string>
@@ -100,8 +100,10 @@
     <string name="notif_1d">1일 남음</string>
     <string name="notif_soon">곧 시작</string>
     <string name="my_events">내 활동</string>
-    <string name="sort_by_time">현재부터 시간 순 정렬</string>
-    <string name="sort_by_creation">생성일 순 정렬</string>
+    <string name="sort_by_time">현재부터 시간 순</string>
+    <string name="sort_by_creation">생성일 순</string>
+    <string name="sort_ascending">오름차순</string>
+    <string name="sort_descending">내림차순</string>
     <string name="timezone">시간대</string>
     <string name="network_time">네트워크 시간</string>
     <string name="app_theme_color">테마 색상</string>
@@ -118,8 +120,11 @@
     <string name="image_color">이미지 및 색상</string>
     <string name="reminder_repeat">미리 알림 및 반복</string>
     <string name="edit">편집</string>
+    <string name="share">이미지로 내보내기</string>
     <string name="copy">복사</string>
     <string name="copy_suffix">_사본</string>
+    <string name="share_success">앨범에 저장되었습니다</string>
+    <string name="share_error">저장 실패: %1$s</string>
     <string name="export_success">내보내기 성공</string>
     <string name="import_success">가져오기 성공</string>
     <string name="notif_format">\"%1$s\" %2$s</string>

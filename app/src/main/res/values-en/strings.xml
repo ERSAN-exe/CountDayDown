@@ -73,7 +73,7 @@
     <string name="rgb_edit">RGB Edit</string>
     <string name="hex_edit">HEX Edit</string>
     <string name="past">Past</string>
-    <string name="version_text">Version v1.4.1</string>
+    <string name="version_text">Version v1.4.2</string>
     <string name="saved_fonts">Added Fonts</string>
     <string name="create_card">Create New Card</string>
     <string name="edit_card">Edit</string>
@@ -82,7 +82,7 @@
     <string name="sort">Sort</string>
     <string name="back">Back</string>
     <string name="app_desc">A simple and lightweight countdown app</string>
-    <string name="made_by">Made by 铃一贰叁</string>
+    <string name="made_by">铃一贰叁</string>
     <string name="notif_disabled_msg">Notifications disabled</string>
     <string name="notif_permission_msg">Please enable notification permission in settings</string>
     <string name="go_to_settings">Go to settings</string>
@@ -100,8 +100,10 @@
     <string name="notif_1d">is coming in 1 day</string>
     <string name="notif_soon">is coming soon</string>
     <string name="my_events">My Activities</string>
-    <string name="sort_by_time">Sort by time from now</string>
-    <string name="sort_by_creation">Sort by creation date</string>
+    <string name="sort_by_time">Time from now</string>
+    <string name="sort_by_creation">Creation date</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_descending">Descending</string>
     <string name="timezone">Timezone</string>
     <string name="network_time">Network Time</string>
     <string name="app_theme_color">Theme Color</string>
@@ -118,8 +120,11 @@
     <string name="image_color">Image &amp; Color</string>
     <string name="reminder_repeat">Reminder &amp; Repeat</string>
     <string name="edit">Edit</string>
+    <string name="share">Export as Image</string>
     <string name="copy">Copy</string>
     <string name="copy_suffix">_Copy</string>
+    <string name="share_success">Saved to gallery</string>
+    <string name="share_error">Save failed: %1$s</string>
     <string name="export_success">Exported successfully</string>
     <string name="import_success">Imported successfully</string>
     <string name="notif_format">\"%1$s\" %2$s</string>

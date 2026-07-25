@@ -24,7 +24,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -101,9 +100,9 @@ fun ColorPickerScreen(
 
     val bgColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background
     
-    // Dynamic preview of accents based on selected color
-    val pickerAccent = selectedColor.copy(alpha = if (isDark) 0.45f else 0.25f).compositeOver(if (isDark) Color(0xFF121212) else Color.White)
-    val contentColor = if (isDark) Color.White else Color.Black
+    // Use stable theme colors instead of dynamic preview accents
+    val pickerAccent = MaterialTheme.colorScheme.primaryContainer
+    val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     val fieldBg = MaterialTheme.colorScheme.surface
     val onFieldColor = MaterialTheme.colorScheme.onSurface
@@ -153,11 +152,13 @@ fun ColorPickerScreen(
                     }
 
                     // Back Button
-                    IconButton(
-                        onClick = { navController.popBackStack() },
+                    Box(
                         modifier = Modifier
-                            .background(pickerAccent, RoundedCornerShape(16.dp))
                             .size(48.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(pickerAccent)
+                            .clickable { navController.popBackStack() },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
