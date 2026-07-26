@@ -2035,7 +2035,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     backgroundBrightness = backgroundBrightness,
                     createdAt = initialEvent?.createdAt ?: System.currentTimeMillis(),
                     notificationContent = notificationContent,
-                    reminderMinutesBefore = reminderMinutes,
+                    reminderMinutesBefore = if (reminderMinutes == -1) null else reminderMinutes,
                     repeatType = repeatType,
                     repeatInterval = repeatInterval.toIntOrNull(),
                     repeatUnit = repeatUnit,
