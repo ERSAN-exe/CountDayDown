@@ -46,7 +46,7 @@
 
 ## 将卡片导出为图片
 
-长按倒数日卡片进入菜单，选择 **导出为图片**。
+长按倒数日卡片进入菜单，选择 **导出为图片**
 
 即可将卡片保存为图片，方便分享
 
@@ -111,14 +111,14 @@
 
 # 桌面小组件
 
-> 目前桌面小组件仅适配 Android 原生小组件库。
+> 目前桌面小组件仅适配 Android 原生小组件库
 
 支持两种大小的小组件：
 
 - 2×2
 - 4×2
 
-显示效果与软件内倒数日卡片保持一致。
+显示效果与软件内倒数日卡片保持一致
 
 <img src="screenshots/widgetperview.png" width="200" alt="桌面小组件">
 
@@ -134,7 +134,7 @@
 
 # 开源协议
 
-本项目采用 [**MIT License**](LICENSE) 开源。
+本项目采用 [**MIT License**](LICENSE) 开源
 
 你可以：
 
@@ -148,7 +148,7 @@
 - ❗ 保留原作者版权声明
 - ❗ 保留 MIT License 协议文本
 
-本项目以「现状」提供，作者不对软件的使用结果、稳定性或适用性提供任何明示或暗示的保证。
+本项目以「现状」提供，作者不对软件的使用结果、稳定性或适用性提供任何明示或暗示的保证
 
 [![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
 
