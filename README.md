@@ -158,13 +158,13 @@
 
 欢迎参与项目贡献：
 
+作者邮箱：ZErO23_FeedBack@outlook.com
+
 [![Issue](https://img.shields.io/badge/Issue-提交问题-red?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/issues)
 
 [![Pull Request](https://img.shields.io/badge/Pull%20Request-提交代码-green?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/pulls)
 
 [![Feature Request](https://img.shields.io/badge/Feature%20Request-新功能建议-blue?style=for-the-badge&logo=lightbulb)](https://github.com/ERSAN-exe/CountDayDown/issues/new)
-
-[![Email](https://img.shields.io/badge/Email-作者邮箱-pur?style=for-the-badge&logo=lightbulb)](ZErO23_FeedBack@outlook.com)
 
 ---
 
