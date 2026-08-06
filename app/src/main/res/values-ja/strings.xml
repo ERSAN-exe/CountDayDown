@@ -73,7 +73,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.4.2</string>
+    <string name="version_text">バージョン v1.4.3</string>
     <string name="saved_fonts">追加されたフォント</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>

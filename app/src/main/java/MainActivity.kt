@@ -332,7 +332,10 @@ class MainActivity : ComponentActivity() {
                             globalCropOriginalUri = null
                         },
                         onDismiss = { globalCropOriginalUri = null },
-                        onReselect = { navController.navigate("image_picker") }
+                        onReselect = { 
+                            globalCropOriginalUri = null
+                            navController.navigate("image_picker") 
+                        }
                     )
                 }
             }
@@ -2797,6 +2800,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
             },
             onDismiss = { cropOriginalUri = null },
             onReselect = {
+                cropOriginalUri = null
                 navController.navigate("image_picker")
             }
         )
