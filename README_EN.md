@@ -2,7 +2,11 @@
 
  [🇨🇳中文](README.md) 🇺🇸English
 
+ App Language Supported :🇨🇳Chinese 🇺🇸English 🇯🇵Japanese 🇰🇷Korean
+
  </div>
+
+ ---
 
 <div align="center">
 
@@ -42,13 +46,13 @@ Simple, beautiful, and easy to use
 
 # Features
 
-## Event Cards
+## Countdown Cards
 
 The app displays the dates you create in the form of cards, making important events more intuitive
 
 Click the button in the upper-left corner of the homepage to switch cardsizes
 
-Large<img src="screenshots/homepageSample1.png" width="200" alt="Large countdown day card"> Small<img src="screenshots/homepageSample2.png" width="200" alt="Small countdown day card">
+Large<img src="screenshots/en/homepageSample1.png" width="200" alt="Large countdown day card"> Small<img src="screenshots/en/homepageSample2.png" width="200" alt="Small countdown day card">
 
 ---
 
@@ -56,15 +60,15 @@ Large<img src="screenshots/homepageSample1.png" width="200" alt="Large countdown
 
 Long press a countdown day card to open the menu and select **Export as Image** to save the card as an image for easy sharing
 
-<img src="screenshots/share.png" width="200" alt="Export menu">
+<img src="screenshots/en/share.png" width="200" alt="Export menu">
 
 Sample:
 
-<img src="screenshots/pic1.png" width="220" alt="Export image example 1">   <img src="screenshots/pic2.png" width="120" alt="Export image example 2">
+<img src="screenshots/en/pic1.png" width="220" alt="Export image example 1">   <img src="screenshots/en/pic2.png" width="120" alt="Export image example 2">
 
 ---
 
-# Create Event Cards
+# Create Countdown Cards
 
 ## Customization
 
@@ -82,7 +86,7 @@ Supports:
 -   🔁 Repeating countdowns
 -   🔔 Notification reminders
 
-<img src="screenshots/basicedit.png" width="200" alt="Basic edit page"> <img src="screenshots/customize.png" width="200" alt="Customization page">  <img src="screenshots/advance.png" width="200" alt="Advanced settings page">
+<img src="screenshots/en/basicedit.png" width="200" alt="Basic edit page"> <img src="screenshots/en/customize.png" width="200" alt="Customization page">  <img src="screenshots/en/advance.png" width="200" alt="Advanced settings page">
 
 ---
 
@@ -112,7 +116,7 @@ Supports backing up the following content as a ZIP archive:
 
 Convenient for users to migrate data
 
-<img src="screenshots/settings.png" width="200" alt="Settings page">
+<img src="screenshots/en/settings.png" width="200" alt="Settings page">
 
 ---
 
@@ -127,15 +131,15 @@ Supports two widget sizes:
 
 The display effect is consistent with the countdown day cards inside the app
 
-<img src="screenshots/widgetperview.png" width="200" alt="Home screen widget">
+<img src="screenshots/en/widgetperview.png" width="200" alt="Home screen widget">
 
 ---
 
 # Getting Started
 
-### Latest Release
+### Release
 
-[![Releases](https://img.shields.io/badge/Releases-View%20Version-blue?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/releases/latest)
+[![Releases](https://img.shields.io/badge/Releases-Latest-blue?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/releases/latest)
 
 ### Download latest APK
 
@@ -147,7 +151,7 @@ The display effect is consistent with the countdown day cards inside the app
 
 ---
 
-# Open Source License
+# License
 
 This project is open source under the [**MIT License**](LICENSE)
 
@@ -179,13 +183,13 @@ Author Email: ZErO23_FeedBack@outlook.com
 
 [![Pull Request](https://img.shields.io/badge/Pull%20Request-Submit%20Code-green?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/pulls)
 
-[![Feature Request](https://img.shields.io/badge/Feature%20Request-New%20Feature%20Suggestion-blue?style=for-the-badge&logo=lightbulb)](https://github.com/ERSAN-exe/CountDayDown/issues/new)
+[![Feature Request](https://img.shields.io/badge/Feature%20Request-Suggestion-blue?style=for-the-badge&logo=lightbulb)](https://github.com/ERSAN-exe/CountDayDown/issues/new)
 
 ---
 
 # Acknowledgements
 
-**Gemini Agent** provided code assistance during development
+**Gemini** provided code assistance during development
 
 <div align="center">
 

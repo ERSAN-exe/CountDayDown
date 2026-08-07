@@ -4,15 +4,13 @@ August 7, 2026
 =============================
 Fixed an issue where clicking the image button on the crop page of the image selector in the settings page could not return to the selection page
 
-
 -----------------------------
 Previous Changelogs
 -----------------------------
-
 v1.4.2 Changelog
 July 25, 2026
 
-Added the ability to export Event Card as images
+Added the ability to export Countdown Card as images
 The loop and reminder indicators are now simplified into a single icon and placed in the bottom-right corner to prevent changes to card size
 The sorting arrows on the homepage now display as ascending and descending text
 Removed the prompt displayed when syncing system time on the homepage
@@ -23,12 +21,11 @@ Fixed an issue where the page theme color changed when selecting colors on the c
 Fixed an issue where card colors changed along with the theme color
 Fixed an issue where text in option boxes on the editing page could be copied
 
-
 -----------------------------
 v1.4.1 Changelog
 July 12, 2026
 
-Removed buttons from Event Card and changed them to long-press editing
+Removed buttons from Countdown Card and changed them to long-press editing
 Moved the import function and made it available in settings
 The overlay intensity slider and image selection card are now combined after adding images
 Restored the text color position on the editing page to the original card color position
@@ -36,7 +33,6 @@ Fixed an issue where the theme color was too light
 Fixed an issue where the homepage switch button color was too dark in dark mode
 Fixed an issue where the notification switch color was too bright in dark mode
 Fixed an issue where the color selection page did not switch correctly in dark mode
-
 
 -----------------------------
 v1.4 Changelog
@@ -50,7 +46,6 @@ A separate text color change option is now displayed after adding images
 Fixed an issue where the default color was not displayed as white after adding images
 Fixed an issue where card colors were automatically replaced with red when selecting past dates
 
-
 -----------------------------
 v1.3 Changelog
 June 13, 2026
@@ -63,7 +58,6 @@ Fixed an issue where custom background images were not exported when exporting c
 Fixed an issue where preview page dates were not synchronized with homepage cards when loop countdown was enabled
 Fixed an issue where the confirm button could not be clicked on the color page on small devices
 
-
 -----------------------------
 v1.2.2 Changelog
 June 13, 2026
@@ -74,7 +68,6 @@ Modified the home screen widget selection window
 A prompt will now appear and automatically navigate when attempting to create an unnamed countdown card
 The crop box is now restricted within the image range to fix black borders in images
 Fixed an issue where widgets did not correctly synchronize background brightness settings
-
 
 -----------------------------
 v1.2.1 Changelog
@@ -87,7 +80,6 @@ Fixed an issue where the color prompt still displayed custom colors when followi
 Fixed an issue where imported custom font names displayed incorrectly
 Fixed an issue where image cropping was incorrect on devices with different display ratios
 Updated localization translations and adjusted some text
-
 
 -----------------------------
 v1.2 Changelog
@@ -102,7 +94,6 @@ Fixed an issue where preset colors appeared in recently used colors
 Fixed abnormal flashing when switching pages
 Optimized application size
 
-
 -----------------------------
 v1.1 Changelog
 June 7, 2026
@@ -114,30 +105,27 @@ Colors used are now recorded and can be deleted by long pressing
 Images' theme colors can now be set as application theme colors
 Fixed notification permission information prompts when notification permission is not granted or manually disabled
 
-
 -----------------------------
 v1.0 Changelog
 May 31, 2026
 
 Redesigned the entire application layout
-The homepage now supports displaying small Event Card and added a switching button
+The homepage now supports displaying small Countdown Card and added a switching button
 Added a new image cropping UI
 Added preview icons for home screen widgets
 Fixed an issue where theme colors could not switch correctly
-Fixed an issue where Event Card were sorted incorrectly
+Fixed an issue where Countdown Card were sorted incorrectly
 Fixed localization text issues
-
 
 -----------------------------
 v0.5 Changelog
 May 16, 2026
 
 Redesigned the countdown creation page, added preview support, and modified the layout
-Event Card can now use images as backgrounds
+Countdown Card can now use images as backgrounds
 Exporting configuration files now also exports custom images
 Fixed some text that was not properly localized
 Changed the update log popup into a separate page
-
 
 -----------------------------
 v0.4 Changelog
@@ -148,7 +136,6 @@ Added 4×2 sized widgets
 Removed time zone display from the settings page
 Added data import and export functions
 Fixed some text that was not properly localized
-
 
 -----------------------------
 v0.3 Changelog
@@ -161,7 +148,6 @@ Re-added time zone display functionality in the settings page
 Added feedback email
 Added the ability to change application theme colors
 Added Traditional Chinese and Korean support
-
 
 -----------------------------
 v0.2 Changelog
@@ -176,7 +162,6 @@ Added the countdown creation page and modified content layout
 Countdown display format now automatically adjusts based on remaining time
 Removed time zone display; time is now automatically synchronized every five minutes
 Added multilingual support: English and Japanese
-
 
 -----------------------------
 v0.1 Changelog

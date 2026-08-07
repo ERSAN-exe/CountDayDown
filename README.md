@@ -2,7 +2,11 @@
 
  🇨🇳中文 [🇺🇸English](README_EN.md)
 
+软件支持的语言:🇨🇳中文（繁体/简体） 🇺🇸英语 🇯🇵日语 🇰🇷韩语
+
  </div>
+
+---
 
 <div align="center">
 
@@ -133,11 +137,11 @@
 
 # 开始使用
 
-### 最新版发布页面
+### 发布页面
 
-[![Releases](https://img.shields.io/badge/Releases-查看版本-blue?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/releases/latest)
+[![Releases](https://img.shields.io/badge/Releases-最新版-blue?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/releases/latest)
 
-### 下载最新版APK
+### 下载最新版安装包
 
 [![Download](https://img.shields.io/badge/下载-安装包-green?style=for-the-badge&logo=android)](https://github.com/ERSAN-exe/CountDayDown/releases/latest/download/app-release.apk)
 
@@ -185,7 +189,7 @@
 
 # 鸣谢
 
-**Gemini Agent** 在开发过程中提供代码辅助
+**Gemini** 在开发过程中提供代码辅助
 
 <div align="center">
 
