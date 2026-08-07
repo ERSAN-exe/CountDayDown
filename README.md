@@ -1,11 +1,19 @@
+<div align="right">
+
+ 🇨🇳中文 [🇺🇸English](README_EN.md)
+
+ </div>
+
 <div align="center">
 
 <img src="app/src/main/res/drawable/my_logo.png" width="100" alt="CountDayDown Logo">
 
-# CountDayDown：倒数倒数日
+# 倒数倒数日
 
 <h3>
+
 一个轻量化的 Android 倒数日应用
+
 </h3>
 
 <p>
@@ -20,7 +28,7 @@
 
 # 简介
 
-**CountDayDown：倒数倒数日** 是一个用于记录生活中重要日期的 Android 应用
+**倒数倒数日** 是一个用于记录生活中重要日期的 Android 应用
 
 你可以使用它：
 
@@ -125,9 +133,17 @@
 
 # 开始使用
 
-[![Releases](https://img.shields.io/badge/Releases-查看版本-blue?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/releases)
+### 最新版发布页面
 
-[![Download](https://img.shields.io/badge/Download-APK-green?style=for-the-badge&logo=android)](https://github.com/ERSAN-exe/CountDayDown/releases/latest/download/app-release.apk)
+[![Releases](https://img.shields.io/badge/Releases-查看版本-blue?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/releases/latest)
+
+### 下载最新版APK
+
+[![Download](https://img.shields.io/badge/下载-安装包-green?style=for-the-badge&logo=android)](https://github.com/ERSAN-exe/CountDayDown/releases/latest/download/app-release.apk)
+
+###  完整更新日志
+
+[![Changelog](https://img.shields.io/badge/Changelog-更新日志-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog.txt)
 
 ---
 
@@ -169,7 +185,7 @@
 
 # 鸣谢
 
-**Gemini 3 Flash Preview** 在开发过程中提供代码辅助
+**Gemini Agent** 在开发过程中提供代码辅助
 
 <div align="center">
 
