@@ -52,7 +52,8 @@
     <string name="completed">終了</string>
     <string name="remaining">残り</string>
     <string name="changelog">更新履歴</string>
-    <string name="changelog_full_title">更新履歴 (中国語のみ)</string>
+    <string name="changelog_full_title">更新履歴</string>
+    <string name="changelog_ai_disclaimer">&gt;&gt; このページの内容はAIによって翻訳されたものであり、正確な内容については簡体字中国語を優先してください &lt;&lt;\n\n</string>
     <string name="syncing">同期中&#8230;</string>
     <string name="current_time" />
     <string name="target">ターゲット: </string>
@@ -73,7 +74,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.4.3</string>
+    <string name="version_text">バージョン v1.5</string>
     <string name="saved_fonts">追加されたフォント</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
@@ -130,6 +131,14 @@
     <string name="notif_format">「%1$s」%2$s</string>
     <string name="about">詳細</string>
     <string name="feedback_email">フィードバック</string>
+    <string name="check_update">更新を確認</string>
+    <string name="checking_update">更新を確認中&#8230;</string>
+    <string name="update_available">新しいバージョンが利用可能です: v%1$s</string>
+    <string name="already_latest">現在のバージョン: %1$d, 最新バージョン: %2$d. 最新バージョンです</string>
+    <string name="update_error">更新の確認に失敗しました</string>
+    <string name="update_dialog_title">新しいバージョンが見つかりました</string>
+    <string name="update_dialog_msg">新しいバージョン (v%1$s) が利用可能です。\n(コード: %2$d → %3$d)\n\nダウンロードしてインストールしますか？</string>
+    <string name="download_start">ダウンロードを開始します&#8230;</string>
     <string name="github">GitHub</string>
     <string name="crop_title">写真を切り取る</string>
     <string name="custom_font">カスタムフォント</string>

@@ -52,7 +52,7 @@
     <string name="completed">已结束</string>
     <string name="remaining">还剩</string>
     <string name="changelog">更新日志</string>
-    <string name="changelog_full_title">更新日志 (仅中文)</string>
+    <string name="changelog_full_title">更新日志</string>
     <string name="syncing">同步时间中&#8230;</string>
     <string name="current_time" />
     <string name="target">目标: </string>
@@ -73,7 +73,7 @@
     <string name="rgb_edit">RGB 调色</string>
     <string name="hex_edit">HEX 调色</string>
     <string name="past">已过去</string>
-    <string name="version_text">版本v1.4.3</string>
+    <string name="version_text">版本v1.5</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>
@@ -129,6 +129,14 @@
     <string name="notif_format">“%1$s”%2$s</string>
     <string name="about">关于</string>
     <string name="feedback_email">反馈</string>
+    <string name="check_update">检查更新</string>
+    <string name="checking_update">正在检查更新&#8230;</string>
+    <string name="update_available">发现新版本: v%1$s</string>
+    <string name="already_latest">当前版本: %1$d, 最新版本: %2$d. 当前已是最新版本</string>
+    <string name="update_error">检查更新失败</string>
+    <string name="update_dialog_title">发现新版本</string>
+    <string name="update_dialog_msg">发现新版本 (v%1$s)\n(版本代码: %2$d → %3$d)\n\n是否立即下载并安装？</string>
+    <string name="download_start">开始下载&#8230;</string>
     <string name="github">GitHub</string>
     <string name="crop_title">裁剪照片</string>
     <string name="custom_font">自定义字体</string>

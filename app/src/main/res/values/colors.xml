@@ -7,4 +7,9 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- App Icon Colors -->
+    <color name="icon_background_pink">#FFB1C1</color>
+    <color name="calendar_header_blue">#00DBFF</color>
+    <color name="calendar_text_green">#A2EF00</color>
 </resources>

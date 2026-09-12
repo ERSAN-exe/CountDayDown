@@ -52,7 +52,8 @@
     <string name="completed">Completed</string>
     <string name="remaining">Remaining</string>
     <string name="changelog">Changelog</string>
-    <string name="changelog_full_title">Changelog (Chinese Only)</string>
+    <string name="changelog_full_title">Changelog</string>
+    <string name="changelog_ai_disclaimer">&gt;&gt; This content is AI-translated. The Simplified Chinese version shall prevail. &lt;&lt;\n\n</string>
     <string name="syncing">Syncing time&#8230;</string>
     <string name="current_time" />
     <string name="target">Target: </string>
@@ -73,7 +74,7 @@
     <string name="rgb_edit">RGB Edit</string>
     <string name="hex_edit">HEX Edit</string>
     <string name="past">Past</string>
-    <string name="version_text">Version v1.4.3</string>
+    <string name="version_text">Version v1.5</string>
     <string name="create_card">Create New Card</string>
     <string name="edit_card">Edit</string>
     <string name="event_name">Event Name</string>
@@ -127,6 +128,14 @@
     <string name="notif_format">\"%1$s\" %2$s</string>
     <string name="about">About</string>
     <string name="feedback_email">Feedback</string>
+    <string name="check_update">Check Update</string>
+    <string name="checking_update">Checking for updates&#8230;</string>
+    <string name="update_available">New version available: v%1$s</string>
+    <string name="already_latest">Current: %1$d, Latest: %2$d. Already the latest version</string>
+    <string name="update_error">Failed to check for updates</string>
+    <string name="update_dialog_title">New Version Found</string>
+    <string name="update_dialog_msg">New version (v%1$s) available.\n(Code: %2$d → %3$d)\n\nWould you like to download and install it?</string>
+    <string name="download_start">Starting download&#8230;</string>
     <string name="github">GitHub</string>
     <string name="crop_title">Crop Photo</string>
     <string name="export_success">Exported successfully</string>

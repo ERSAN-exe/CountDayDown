@@ -97,8 +97,14 @@ import com.Zero23.countdown.ui.ImagePickerScreen
 import com.Zero23.countdown.data.CountdownEvent
 import com.Zero23.countdown.data.DataManager
 import com.Zero23.countdown.data.SavedFont
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.os.Environment
+import androidx.core.content.FileProvider
 import com.Zero23.countdown.notifications.NotificationHelper
 import com.Zero23.countdown.ui.theme.CountDownTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -132,8 +138,60 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 
 class MainActivity : ComponentActivity() {
+
+    private val updateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (DownloadManager.ACTION_DOWNLOAD_COMPLETE == intent.action) {
+                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                val dm = context.getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                val query = DownloadManager.Query().setFilterById(id)
+                val cursor = dm.query(query)
+                if (cursor.moveToFirst()) {
+                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                    if (statusIndex != -1 && DownloadManager.STATUS_SUCCESSFUL == cursor.getInt(statusIndex)) {
+                        val uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                        if (uriIndex != -1) {
+                            val uriString = cursor.getString(uriIndex)
+                            if (uriString != null) {
+                                val uri = uriString.toUri()
+                                installApk(context, uri)
+                            }
+                        }
+                    }
+                }
+                cursor.close()
+            }
+        }
+    }
+
+    private fun installApk(context: Context, uri: Uri) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            
+            val apkUri = if (uri.scheme == "content") {
+                uri
+            } else {
+                val file = File(uri.path!!)
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            }
+            
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(updateReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(updateReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+        }
         enableEdgeToEdge()
         setContent {
             val context = LocalContext.current
@@ -141,6 +199,33 @@ class MainActivity : ComponentActivity() {
             val dataManager = remember { DataManager(context) }
             val themeMode by dataManager.themeMode.collectAsState(initial = 0)
             val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
+
+            // Update Dialog State
+            var showUpdateDialog by remember { mutableStateOf(false) }
+            var pendingVersionName by remember { mutableStateOf("") }
+            var pendingRemoteCode by remember { mutableIntStateOf(0) }
+            var pendingLocalCode by remember { mutableIntStateOf(0) }
+            
+            if (showUpdateDialog) {
+                AlertDialog(
+                    onDismissRequest = { showUpdateDialog = false },
+                    title = { Text(stringResource(R.string.update_dialog_title)) },
+                    text = { Text(stringResource(R.string.update_dialog_msg, pendingVersionName, pendingLocalCode, pendingRemoteCode)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showUpdateDialog = false
+                            startUpdateDownload(context)
+                        }) {
+                            Text(stringResource(R.string.confirm))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showUpdateDialog = false }) {
+                            Text(stringResource(R.string.cancel))
+                        }
+                    }
+                )
+            }
 
             // Collect global background settings
             val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
@@ -213,6 +298,14 @@ class MainActivity : ComponentActivity() {
                         if (intent?.action == "com.Zero23.countdown.ACTION_CREATE_EVENT") {
                             navController.navigate("add_edit")
                         }
+                        
+                        // Silent update check on launch
+                        checkUpdate(context, scope, silent = true, onUpdateAvailable = { version, remote, local ->
+                            pendingVersionName = version
+                            pendingRemoteCode = remote
+                            pendingLocalCode = local
+                            showUpdateDialog = true
+                        })
                     }
                     
                     NavHost(
@@ -258,7 +351,17 @@ class MainActivity : ComponentActivity() {
                                     navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_image_uri")
                                 }
                             }
-                            SettingsScreen(navController, dataManager, onPickBg = { navController.navigate("image_picker") })
+                            SettingsScreen(
+                                navController = navController,
+                                dataManager = dataManager,
+                                onPickBg = { navController.navigate("image_picker") },
+                                onUpdateFound = { version, remote, local ->
+                                    pendingVersionName = version
+                                    pendingRemoteCode = remote
+                                    pendingLocalCode = local
+                                    showUpdateDialog = true
+                                }
+                            )
                         }
                         composable("image_picker") {
                             ImagePickerScreen(
@@ -340,6 +443,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(updateReceiver)
+        } catch (_: Exception) {}
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -791,7 +901,12 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavController, dataManager: DataManager, onPickBg: () -> Unit) {
+fun SettingsScreen(
+    navController: NavController,
+    dataManager: DataManager,
+    onPickBg: () -> Unit,
+    onUpdateFound: (String, Int, Int) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val exportSuccessMsg = stringResource(R.string.export_success)
@@ -1163,10 +1278,14 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                val followSystemText = stringResource(R.string.theme_follow_system)
                                 Text(
-                                    text = stringResource(R.string.theme_follow_system),
+                                    text = followSystemText,
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    fontSize = if (followSystemText.length > 8) 10.sp else 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -1179,10 +1298,14 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                val followBgText = stringResource(R.string.follow_bg)
                                 Text(
-                                    text = stringResource(R.string.follow_bg),
+                                    text = followBgText,
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = if (appBgImage != null) MaterialTheme.colorScheme.onSurface else Color.Gray.copy(alpha = 0.6f)
+                                    fontSize = if (followBgText.length > 8) 10.sp else 12.sp,
+                                    color = if (appBgImage != null) MaterialTheme.colorScheme.onSurface else Color.Gray.copy(alpha = 0.6f),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -1490,6 +1613,35 @@ fun SettingsScreen(navController: NavController, dataManager: DataManager, onPic
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surface)
                             .clickable {
+                                checkUpdate(context, scope, onUpdateAvailable = { version, remote, local ->
+                                    onUpdateFound(version, remote, local)
+                                })
+                            }
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Update,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.check_update),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .clickable {
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
                                     data = "mailto:ZErO23_FeedBack@outlook.com".toUri()
                                 }
@@ -1544,9 +1696,25 @@ fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
     val context = LocalContext.current
     val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
     val noChangelogMsg = stringResource(R.string.no_changelog)
-    val changelogText = remember(noChangelogMsg) {
+    val aiDisclaimer = stringResource(R.string.changelog_ai_disclaimer)
+    val configuration = LocalConfiguration.current
+    val changelogText = remember(configuration, noChangelogMsg, aiDisclaimer) {
+        val locale = configuration.locales[0]
+        val language = locale.language.lowercase()
+        val country = locale.country.uppercase()
+        val script = locale.script.lowercase()
+        // Simplified Chinese is the source of truth; every other locale is an AI translation.
+        val isSimplifiedChinese = language == "zh" && script != "hant" &&
+            country != "TW" && country != "HK" && country != "MO"
+        val assetName = when (language) {
+            "zh" -> if (isSimplifiedChinese) "changelog.txt" else "changelog_zh_tw.txt"
+            "ja" -> "changelog_ja.txt"
+            "ko" -> "changelog_ko.txt"
+            else -> "changelog_en.txt"
+        }
         try {
-            context.assets.open("changelog.txt").bufferedReader().use { it.readText() }
+            val content = context.assets.open(assetName).bufferedReader().use { it.readText() }
+            if (isSimplifiedChinese) content else aiDisclaimer + content
         } catch (_: Exception) {
             noChangelogMsg
         }
@@ -3520,6 +3688,68 @@ fun ImageCropOverlay(
                 modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp)).size(56.dp)
             ) {
                 Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(28.dp))
+            }
+        }
+    }
+}
+
+private fun startUpdateDownload(context: Context) {
+    try {
+        val url = "https://github.com/ERSAN-exe/CountDayDown/releases/latest/download/app-release.apk"
+        val request = DownloadManager.Request(url.toUri())
+            .setTitle(context.getString(R.string.app_name))
+            .setDescription(context.getString(R.string.download_start))
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "CountDayDown_Update.apk")
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        dm.enqueue(request)
+        Toast.makeText(context, context.getString(R.string.download_start), Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+private fun checkUpdate(context: Context, scope: CoroutineScope, silent: Boolean = false, onUpdateAvailable: (String, Int, Int) -> Unit = { _, _, _ -> }) {
+    scope.launch(Dispatchers.IO) {
+        try {
+            if (!silent) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, context.getString(R.string.checking_update), Toast.LENGTH_SHORT).show()
+                }
+            }
+            
+            val url = URL("https://raw.githubusercontent.com/ERSAN-exe/CountDayDown/master/app/build.gradle.kts")
+            val content = url.readText()
+            
+            val versionCodeRegex = Regex("""versionCode\s*=\s*(\d+)""")
+            val versionNameRegex = Regex("""versionName\s*=\s*"([^"]+)"""")
+            
+            val remoteVersionCode = versionCodeRegex.find(content)?.groupValues?.get(1)?.toIntOrNull() ?: -1
+            val remoteVersionName = versionNameRegex.find(content)?.groupValues?.get(1) ?: "unknown"
+            
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            val currentVersionCode = packageInfo.longVersionCode.toInt()
+            
+            withContext(Dispatchers.Main) {
+                if (remoteVersionCode > currentVersionCode) {
+                    onUpdateAvailable(remoteVersionName, remoteVersionCode, currentVersionCode)
+                } else if (!silent) {
+                    if (remoteVersionCode != -1) {
+                        Toast.makeText(context, context.getString(R.string.already_latest, currentVersionCode, remoteVersionCode), Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, context.getString(R.string.update_error), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (!silent) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, context.getString(R.string.update_error), Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

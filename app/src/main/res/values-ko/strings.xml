@@ -52,7 +52,8 @@
     <string name="completed">종료</string>
     <string name="remaining">남음</string>
     <string name="changelog">업데이트 기록</string>
-    <string name="changelog_full_title">업데이트 기록 (중국어만 제공)</string>
+    <string name="changelog_full_title">업데이트 기록</string>
+    <string name="changelog_ai_disclaimer">&gt;&gt; 이 페이지의 내용은 AI로 번역되었으며, 정확한 내용은 간체 중국어를 기준으로 합니다 &lt;&lt;\n\n</string>
     <string name="syncing">동기화 중&#8230;</string>
     <string name="current_time" />
     <string name="target">대상: </string>
@@ -73,7 +74,7 @@
     <string name="rgb_edit">RGB 편집</string>
     <string name="hex_edit">HEX 편집</string>
     <string name="past">경과</string>
-    <string name="version_text">버전 v1.4.3</string>
+    <string name="version_text">버전 v1.5</string>
     <string name="saved_fonts">추가된 글꼴</string>
     <string name="create_card">새 카드 생성</string>
     <string name="edit_card">편집</string>
@@ -130,6 +131,14 @@
     <string name="notif_format">\"%1$s\" %2$s</string>
     <string name="about">정보</string>
     <string name="feedback_email">피드백</string>
+    <string name="check_update">업데이트 확인</string>
+    <string name="checking_update">업데이트 확인 중&#8230;</string>
+    <string name="update_available">새로운 버전을 사용할 수 있습니다: v%1$s</string>
+    <string name="already_latest">현재 버전: %1$d, 최신 버전: %2$d. 최신 버전입니다</string>
+    <string name="update_error">업데이트 확인 실패</string>
+    <string name="update_dialog_title">새로운 버전 발견</string>
+    <string name="update_dialog_msg">새로운 버전 (v%1$s)을 사용할 수 있습니다.\n(코드: %2$d → %3$d)\n\n다운로드하고 설치하시겠습니까?</string>
+    <string name="download_start">다운로드 시작 중&#8230;</string>
     <string name="github">GitHub</string>
     <string name="crop_title">사진 자르기</string>
     <string name="custom_font">사용자 정의 글꼴</string>

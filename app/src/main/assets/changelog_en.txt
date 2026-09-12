@@ -1,11 +1,20 @@
 =============================
-v1.4.3 Changelog
-August 7, 2026
+v1.5 Changelog
+September 12, 2026
 =============================
-Fixed an issue where clicking the image button on the crop page of the image selector in the settings page could not return to the selection page
+Added update checking functionality
+Redrew the application icon
+Adjusted text size in buttons on the settings page
+Synced the changelogs for other languages
 
 -----------------------------
 Previous Changelogs
+-----------------------------
+v1.4.3 Changelog
+August 7, 2026
+
+Fixed an issue where clicking the image button on the crop page of the image selector in the settings page could not return to the selection page
+
 -----------------------------
 v1.4.2 Changelog
 July 25, 2026

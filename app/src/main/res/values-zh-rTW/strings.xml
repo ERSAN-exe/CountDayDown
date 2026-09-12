@@ -52,7 +52,8 @@
     <string name="completed">已結束</string>
     <string name="remaining">還剩</string>
     <string name="changelog">更新日誌</string>
-    <string name="changelog_full_title">更新日誌 (僅中文)</string>
+    <string name="changelog_full_title">更新日誌</string>
+    <string name="changelog_ai_disclaimer">&gt;&gt; 本頁面的內容由 AI 翻譯，內容請以簡體中文為準 &lt;&lt;\n\n</string>
     <string name="syncing">同步時間中&#8230;</string>
     <string name="current_time" />
     <string name="target">目標: </string>
@@ -73,7 +74,7 @@
     <string name="rgb_edit">RGB 調色</string>
     <string name="hex_edit">HEX 調色</string>
     <string name="past">已過去</string>
-    <string name="version_text">版本 v1.4.3</string>
+    <string name="version_text">版本 v1.5</string>
     <string name="saved_fonts">已添加的字體</string>
     <string name="create_card">創建新倒計時卡片</string>
     <string name="edit_card">編輯</string>
@@ -130,6 +131,14 @@
     <string name="notif_format">“%1$s”%2$s</string>
     <string name="about">關於</string>
     <string name="feedback_email">反饋</string>
+    <string name="check_update">檢查更新</string>
+    <string name="checking_update">正在檢查更新&#8230;</string>
+    <string name="update_available">發現新版本: v%1$s</string>
+    <string name="already_latest">目前版本: %1$d, 最新版本: %2$d. 目前已是最新版本</string>
+    <string name="update_error">檢查更新失敗</string>
+    <string name="update_dialog_title">發現新版本</string>
+    <string name="update_dialog_msg">發現新版本 (v%1$s)\n(版本代碼: %2$d → %3$d)\n\n是否立即下載並安裝？</string>
+    <string name="download_start">開始下載&#8230;</string>
     <string name="github">GitHub</string>
     <string name="crop_title">裁剪照片</string>
     <string name="custom_font">自定義字體</string>
