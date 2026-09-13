@@ -135,10 +135,6 @@
 
 [![Changelog](https://img.shields.io/badge/Changelog-更新日志-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog.txt)
 
-# 开源协议
-
-[![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
-
 # 贡献
 
 欢迎参与项目贡献：
