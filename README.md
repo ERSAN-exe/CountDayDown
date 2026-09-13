@@ -1,6 +1,6 @@
 <div align="right">
 
- 🇨🇳中文 [🇺🇸English](README_EN.md)
+[🇺🇸English](README_EN.md)
 
  </div>
 
@@ -40,8 +40,6 @@
 
 简单、美观、易用
 
----
-
 # 软件功能
 
 ## 倒数日卡片
@@ -52,8 +50,6 @@
 
 大号卡片<img src="screenshots/homepageSample1.png" width="200" alt="大号倒数日卡片"> 小号卡片<img src="screenshots/homepageSample2.png" width="200" alt="小号倒数日卡片">
 
----
-
 ## 将卡片导出为图片
 
 长按倒数日卡片进入菜单选择 **导出为图片** 即可将卡片保存为图片 方便分享
@@ -63,8 +59,6 @@
 导出效果：
 
 <img src="screenshots/pic1.png" width="220" alt="导出图片示例1"> <img src="screenshots/pic2.png" width="120" alt="导出图片示例2">
-
----
 
 # 创建倒数日卡片
 
@@ -85,8 +79,6 @@
 - 🔔 通知提醒
 
 <img src="screenshots/basicedit.png" width="200" alt="基础编辑页面"> <img src="screenshots/customize.png" width="200" alt="自定义页面"> <img src="screenshots/advance.png" width="200" alt="高级设置页面">
-
----
 
 # 软件设置
 
@@ -116,8 +108,6 @@
 
 <img src="screenshots/settings.png" width="200" alt="设置页面">
 
----
-
 # 桌面小组件
 
 > 目前桌面小组件仅适配 Android 原生小组件库
@@ -130,8 +120,6 @@
 显示效果与软件内倒数日卡片保持一致
 
 <img src="screenshots/widgetperview.png" width="200" alt="桌面小组件">
-
----
 
 # 开始使用
 
@@ -147,13 +135,9 @@
 
 [![Changelog](https://img.shields.io/badge/Changelog-更新日志-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog.txt)
 
----
-
 # 开源协议
 
 [![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
-
----
 
 # 贡献
 
@@ -166,10 +150,6 @@
 [![Pull Request](https://img.shields.io/badge/Pull%20Request-提交代码-green?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/pulls)
 
 [![Feature Request](https://img.shields.io/badge/Feature%20Request-新功能建议-blue?style=for-the-badge&logo=lightbulb)](https://github.com/ERSAN-exe/CountDayDown/issues/new)
-
----
-
-# 鸣谢
 
 <div align="center">
 
