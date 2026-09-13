@@ -2,8 +2,6 @@
 
  🇨🇳中文 [🇺🇸English](README_EN.md)
 
-软件支持的语言:🇨🇳中文（繁体/简体） 🇺🇸英语 🇯🇵日语 🇰🇷韩语
-
  </div>
 
 ---
@@ -153,22 +151,6 @@
 
 # 开源协议
 
-本项目采用 [**MIT License**](LICENSE) 开源
-
-你可以：
-
-- ✅ 自由使用本项目
-- ✅ 修改源代码
-- ✅ 发布修改后的版本
-- ✅ 用于商业项目
-
-但需要：
-
-- ❗ 保留原作者版权声明
-- ❗ 保留 MIT License 协议文本
-
-本项目以「现状」提供 作者不对软件的使用结果、稳定性或适用性提供任何明示或暗示的保证
-
 [![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
 
 ---
@@ -188,8 +170,6 @@
 ---
 
 # 鸣谢
-
-**Gemini** 在开发过程中提供代码辅助
 
 <div align="center">
 
