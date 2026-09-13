@@ -4,6 +4,8 @@ Supported Language:🇨🇳Chinese 🇺🇸English 🇯🇵Japanese 🇰🇷Kore
 
  </div>
 
+ ---
+
 <div align="center">
 
 <img src="app/src/main/res/drawable/my_logo.png" width="100" alt="CountDayDown Logo">
