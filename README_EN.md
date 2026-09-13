@@ -1,8 +1,6 @@
 <div align="right">
 
- [🇨🇳中文](README.md) 🇺🇸English
-
- App Language Supported :🇨🇳Chinese 🇺🇸English 🇯🇵Japanese 🇰🇷Korean
+Supported Language:🇨🇳Chinese 🇺🇸English 🇯🇵Japanese 🇰🇷Korean
 
  </div>
 
@@ -153,22 +151,6 @@ The display effect is consistent with the countdown day cards inside the app
 
 # License
 
-This project is open source under the [**MIT License**](LICENSE)
-
-You can:
-
--   ✅ Freely use this project
--   ✅ Modify the source code
--   ✅ Release modified versions
--   ✅ Use it in commercial projects
-
-But you need to:
-
--   ❗ Keep the original author's copyright notice
--   ❗ Keep the MIT License text
-
-This project is provided "as is". The author does not provide any express or implied warranty regarding the results, stability, or applicability of the software.
-
 [![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
 
 ---
@@ -188,8 +170,6 @@ Author Email: ZErO23_FeedBack@outlook.com
 ---
 
 # Acknowledgements
-
-**Gemini** provided code assistance during development
 
 <div align="center">
 
