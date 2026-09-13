@@ -1,8 +1,6 @@
 <div align="right">
 
- [🇨🇳中文](README.md) 🇺🇸English
-
- App Language Supported :🇨🇳Chinese 🇺🇸English 🇯🇵Japanese 🇰🇷Korean
+Supported Language:🇨🇳Chinese 🇺🇸English 🇯🇵Japanese 🇰🇷Korean
 
  </div>
 
@@ -26,9 +24,9 @@ A lightweight Android countdown day application
 
 </p>
 
-</div>
-
 ---
+
+</div>
 
 # Introduction
 
@@ -42,8 +40,6 @@ You can use it to:
 
 Simple, beautiful, and easy to use
 
----
-
 # Features
 
 ## Countdown Cards
@@ -54,8 +50,6 @@ Click the button in the upper-left corner of the homepage to switch cardsizes
 
 Large<img src="screenshots/en/homepageSample1.png" width="200" alt="Large countdown day card"> Small<img src="screenshots/en/homepageSample2.png" width="200" alt="Small countdown day card">
 
----
-
 ## Export Cards as Images
 
 Long press a countdown day card to open the menu and select **Export as Image** to save the card as an image for easy sharing
@@ -65,8 +59,6 @@ Long press a countdown day card to open the menu and select **Export as Image** 
 Sample:
 
 <img src="screenshots/en/pic1.png" width="220" alt="Export image example 1">   <img src="screenshots/en/pic2.png" width="120" alt="Export image example 2">
-
----
 
 # Create Countdown Cards
 
@@ -87,8 +79,6 @@ Supports:
 -   🔔 Notification reminders
 
 <img src="screenshots/en/basicedit.png" width="200" alt="Basic edit page"> <img src="screenshots/en/customize.png" width="200" alt="Customization page">  <img src="screenshots/en/advance.png" width="200" alt="Advanced settings page">
-
----
 
 # App Settings
 
@@ -118,8 +108,6 @@ Convenient for users to migrate data
 
 <img src="screenshots/en/settings.png" width="200" alt="Settings page">
 
----
-
 # Widgets
 
 > Currently, home screen widgets only support the native Android widget library
@@ -132,8 +120,6 @@ Supports two widget sizes:
 The display effect is consistent with the countdown day cards inside the app
 
 <img src="screenshots/en/widgetperview.png" width="200" alt="Home screen widget">
-
----
 
 # Getting Started
 
@@ -149,30 +135,6 @@ The display effect is consistent with the countdown day cards inside the app
 
 [![Changelog](https://img.shields.io/badge/Changelog-English-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_en.txt)
 
----
-
-# License
-
-This project is open source under the [**MIT License**](LICENSE)
-
-You can:
-
--   ✅ Freely use this project
--   ✅ Modify the source code
--   ✅ Release modified versions
--   ✅ Use it in commercial projects
-
-But you need to:
-
--   ❗ Keep the original author's copyright notice
--   ❗ Keep the MIT License text
-
-This project is provided "as is". The author does not provide any express or implied warranty regarding the results, stability, or applicability of the software.
-
-[![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
-
----
-
 # Contribution
 
 Contributions are welcome:
@@ -184,12 +146,6 @@ Author Email: ZErO23_FeedBack@outlook.com
 [![Pull Request](https://img.shields.io/badge/Pull%20Request-Submit%20Code-green?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/pulls)
 
 [![Feature Request](https://img.shields.io/badge/Feature%20Request-Suggestion-blue?style=for-the-badge&logo=lightbulb)](https://github.com/ERSAN-exe/CountDayDown/issues/new)
-
----
-
-# Acknowledgements
-
-**Gemini** provided code assistance during development
 
 <div align="center">
 
