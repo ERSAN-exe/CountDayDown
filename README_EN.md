@@ -135,10 +135,6 @@ The display effect is consistent with the countdown day cards inside the app
 
 [![Changelog](https://img.shields.io/badge/Changelog-English-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_en.txt)
 
-# License
-
-[![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
-
 # Contribution
 
 Contributions are welcome:
