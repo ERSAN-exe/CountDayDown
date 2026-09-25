@@ -1,6 +1,6 @@
 <div align="right">
 
-Supported Language:🇨🇳Chinese 🇺🇸English 🇯🇵Japanese 🇰🇷Korean
+Supported Language:🇨🇳 Chinese 🇺🇸 English 🇯🇵 Japanese 🇰🇷 Korean
 
  </div>
 
@@ -24,29 +24,18 @@ A lightweight Android countdown day application
 
 </p>
 
----
-
 </div>
 
 # Introduction
 
-**CountDayDown** is an Android application used torecord important dates in life
+**CountDayDown** is an Android application designed to record important dates in everyday life, featuring customizable reminder cards.
 
-You can use it to:
-
--   Record important future events
--   Save memorable moments from the past
--   Create personalized countdown day cards
-
-Simple, beautiful, and easy to use
 
 # Features
 
 ## Countdown Cards
 
 The app displays the dates you create in the form of cards, making important events more intuitive
-
-Click the button in the upper-left corner of the homepage to switch cardsizes
 
 Large<img src="screenshots/en/homepageSample1.png" width="200" alt="Large countdown day card"> Small<img src="screenshots/en/homepageSample2.png" width="200" alt="Small countdown day card">
 
@@ -58,33 +47,29 @@ Long press a countdown day card to open the menu and select **Export as Image** 
 
 Sample:
 
-<img src="screenshots/en/pic1.png" width="220" alt="Export image example 1">   <img src="screenshots/en/pic2.png" width="120" alt="Export image example 2">
+<img src="screenshots/en/pic1.png" width="220" alt="Export image example 1"> <img src="screenshots/en/pic2.png" width="120" alt="Export image example 2"> <img src="screenshots/en/pic3.png" width="220" alt="Export image example 3">
 
 # Create Countdown Cards
 
 ## Customization
 
-Supports:
-
 -   🌈 Custom colors
 -   🖼️ Set images as card backgrounds
 -   🔤 Import custom fonts
 
-## Date Settings
+<img src="screenshots/en/customize.png" width="200" alt="Customization page">
 
-Supports:
+## Date Settings
 
 -   ↗️ Exclude specified days of the week
 -   🔁 Repeating countdowns
 -   🔔 Notification reminders
 
-<img src="screenshots/en/basicedit.png" width="200" alt="Basic edit page"> <img src="screenshots/en/customize.png" width="200" alt="Customization page">  <img src="screenshots/en/advance.png" width="200" alt="Advanced settings page">
+<img src="screenshots/en/basicedit.png" width="200" alt="Basic edit page">   <img src="screenshots/en/advance.png" width="200" alt="Advanced settings page">
 
 # App Settings
 
 ## App Customization
-
-Supports:
 
 -   Light mode / Dark mode
 -   🌈 Custom app theme colors
@@ -106,7 +91,7 @@ Supports backing up the following content as a ZIP archive:
 
 Convenient for users to migrate data
 
-<img src="screenshots/en/settings.png" width="200" alt="Settings page">
+<img src="screenshots/en/settings1.png" width="200" alt="Settings page"> <img src="screenshots/en/settings2.png" width="200" alt="About">
 
 # Widgets
 
@@ -134,6 +119,12 @@ The display effect is consistent with the countdown day cards inside the app
 ### Changelog
 
 [![Changelog](https://img.shields.io/badge/Changelog-English-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_en.txt)
+
+[![Changelog](https://img.shields.io/badge/Changelog-日本語-white?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_ja.txt)
+
+[![Changelog](https://img.shields.io/badge/Changelog-繁體中文-red?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_zh_tw.txt)
+
+[![Changelog](https://img.shields.io/badge/Changelog-한국어-black?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_ko.txt)
 
 # Contribution
 

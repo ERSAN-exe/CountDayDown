@@ -1,6 +1,6 @@
 <div align="right">
 
-[🇺🇸English](README_EN.md)
+[🇺🇸 English](README_EN.md)
 
  </div>
 
@@ -26,27 +26,15 @@
 
 </div>
 
----
-
 # 简介
 
-**倒数倒数日** 是一个用于记录生活中重要日期的 Android 应用
-
-你可以使用它：
-
-- 记录未来的重要事件
-- 保存过去值得纪念的瞬间
-- 创建个性化倒数日卡片
-
-简单、美观、易用
+**倒数倒数日** 是一个用于记录生活中重要日期的 Android 应用,提供可个性化的卡片样式的提醒事项
 
 # 软件功能
 
 ## 倒数日卡片
 
 软件会以卡片形式展示你创建的日期 让重要事件更加直观
-
-点击主页左上角按钮 可以切换卡片大小
 
 大号卡片<img src="screenshots/homepageSample1.png" width="200" alt="大号倒数日卡片"> 小号卡片<img src="screenshots/homepageSample2.png" width="200" alt="小号倒数日卡片">
 
@@ -58,33 +46,29 @@
 
 导出效果：
 
-<img src="screenshots/pic1.png" width="220" alt="导出图片示例1"> <img src="screenshots/pic2.png" width="120" alt="导出图片示例2">
+<img src="screenshots/pic1.png" width="220" alt="导出图片示例1"> <img src="screenshots/pic2.png" width="120" alt="导出图片示例2"> <img src="screenshots/pic3.png" width="220" alt="导出图片示例3">
 
 # 创建倒数日卡片
 
 ## 美化
 
-支持：
-
 - 🌈 自定义颜色
 - 🖼️ 设置图片作为卡片背景
 - 🔤 导入自定义字体
 
-## 日期设置
+<img src="screenshots/customize.png" width="200" alt="自定义页面"> 
 
-支持：
+## 日期设置
 
 - ↗️ 排除一周中的指定日期
 - 🔁 循环倒数
 - 🔔 通知提醒
 
-<img src="screenshots/basicedit.png" width="200" alt="基础编辑页面"> <img src="screenshots/customize.png" width="200" alt="自定义页面"> <img src="screenshots/advance.png" width="200" alt="高级设置页面">
+<img src="screenshots/basicedit.png" width="200" alt="基础编辑页面"> <img src="screenshots/advance.png" width="200" alt="高级设置页面">
 
 # 软件设置
 
 ## 应用美化
-
-支持：
 
 - 浅色模式/深色模式
 - 🌈 自定义软件主题色
@@ -106,7 +90,7 @@
 
 方便用户迁移数据
 
-<img src="screenshots/settings.png" width="200" alt="设置页面">
+<img src="screenshots/settings1.png" width="200" alt="设置页面"> <img src="screenshots/settings2.png" width="200" alt="关于页面">
 
 # 桌面小组件
 
@@ -133,7 +117,7 @@
 
 ###  完整更新日志
 
-[![Changelog](https://img.shields.io/badge/Changelog-更新日志-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog.txt)
+[![Changelog](https://img.shields.io/badge/更新日志-简体中文-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog.txt)
 
 # 贡献
 
