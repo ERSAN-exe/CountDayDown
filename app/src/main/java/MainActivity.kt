@@ -12,11 +12,14 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTransformGestures
 import android.content.pm.PackageManager
@@ -25,6 +28,7 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -43,6 +47,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -55,18 +61,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import androidx.core.content.ContextCompat
@@ -75,6 +88,11 @@ import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -132,8 +150,11 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import android.content.ContentValues
 import android.provider.MediaStore
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.Zero23.countdown.data.BackupData
 import kotlinx.serialization.json.Json
+import java.net.HttpURLConnection
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 
@@ -197,6 +218,14 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val scope = rememberCoroutineScope()
             val dataManager = remember { DataManager(context) }
+
+            // Reclaim images that no longer belong to any card, and rescue any images that an
+            // older version stored in cacheDir. This runs once per app start, where no editor
+            // can be holding unsaved crops, so it is safe and keeps filesDir from growing.
+            LaunchedEffect(Unit) {
+                migrateCachedImages(context, dataManager)
+                pruneOrphanImages(context, dataManager)
+            }
             val themeMode by dataManager.themeMode.collectAsState(initial = 0)
             val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
 
@@ -354,7 +383,7 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen(
                                 navController = navController,
                                 dataManager = dataManager,
-                                onPickBg = { navController.navigate("image_picker") },
+                                onPickBg = { navController.navigate("image_picker?allowMulti=false") },
                                 onUpdateFound = { version, remote, local ->
                                     pendingVersionName = version
                                     pendingRemoteCode = remote
@@ -363,12 +392,24 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
-                        composable("image_picker") {
+                        composable(
+                            route = "image_picker?allowMulti={allowMulti}",
+                            arguments = listOf(navArgument("allowMulti") { defaultValue = false; type = NavType.BoolType })
+                        ) { backStackEntry ->
+                            val allowMulti = backStackEntry.arguments?.getBoolean("allowMulti") ?: false
                             ImagePickerScreen(
                                 navController = navController,
                                 dataManager = dataManager,
-                                onImageSelected = { uri ->
-                                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_image_uri", uri.toString())
+                                initialAllowMulti = allowMulti,
+                                onImagesSelected = { uris ->
+                                    if (uris.isNotEmpty()) {
+                                        if (uris.size > 1) {
+                                            val uriStrings = Json.encodeToString(uris.map { it.toString() })
+                                            navController.previousBackStackEntry?.savedStateHandle?.set("selected_image_uris", uriStrings)
+                                        } else {
+                                            navController.previousBackStackEntry?.savedStateHandle?.set("selected_image_uri", uris.first().toString())
+                                        }
+                                    }
                                     navController.popBackStack()
                                 }
                             )
@@ -437,7 +478,7 @@ class MainActivity : ComponentActivity() {
                         onDismiss = { globalCropOriginalUri = null },
                         onReselect = { 
                             globalCropOriginalUri = null
-                            navController.navigate("image_picker") 
+                            navController.navigate("image_picker?allowMulti=false") 
                         }
                     )
                 }
@@ -477,19 +518,49 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
     val sortByCreationDate = sortByCreationDatePref
     val isGridView = isGridViewPref
     var currentTick by remember { mutableStateOf(LocalDateTime.now()) }
+
+    // Home screen search: the button next to the gear turns the title into a text field.
+    var isSearchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    val searchFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) {
+            // Let the field reach the layout pass before grabbing focus (which opens the IME).
+            withFrameNanos { }
+            searchFocusRequester.requestFocus()
+        } else {
+            focusManager.clearFocus()
+        }
+    }
+
+    // Back closes the search instead of leaving the screen.
+    BackHandler(enabled = isSearchActive) {
+        isSearchActive = false
+        searchQuery = ""
+    }
     
     val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
 
-    val events = remember(rawEvents, sortAscending, sortByCreationDate, currentTick) {
-        val sorted = if (sortByCreationDate) {
-            rawEvents.sortedBy { it.createdAt }
+    val events = remember(rawEvents, sortAscending, sortByCreationDate, currentTick, searchQuery) {
+        val ordered = orderHomeEvents(rawEvents, sortAscending, sortByCreationDate, currentTick)
+        if (searchQuery.isBlank()) {
+            ordered
         } else {
-            rawEvents.sortedBy { event ->
-                val target = event.calculateTarget(currentTick)
-                Duration.between(currentTick, target).abs().toMillis()
-            }
+            // Fuzzy match on the title and the target date. Best match first; cards with the same
+            // score keep the sort order chosen above.
+            ordered
+                .mapNotNull { event ->
+                    fuzzySearchScore(
+                        searchQuery,
+                        event.name,
+                        event.calculateTarget(currentTick).format(searchDateFormatter)
+                    )?.let { score -> event to score }
+                }
+                .sortedByDescending { it.second }
+                .map { it.first }
         }
-        if (sortAscending) sorted else sorted.reversed()
     }
     
     var eventToDelete by remember { mutableStateOf<CountdownEvent?>(null) }
@@ -500,41 +571,34 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
             scope.launch(Dispatchers.IO) {
                 val currentEvents = dataManager.events.first()
 
-                var newBgUri = event.backgroundImageUri
-                var newWidgetUri = event.widgetImageUri
-
-                // Try to copy image files to avoid broken links on deletion
-                try {
-                    event.backgroundImageUri?.let { uriStr ->
+                // Copy the image files so deleting the original card can't break this one
+                fun copyImage(uriStr: String, prefix: String): String {
+                    return try {
                         val uri = uriStr.toUri()
                         if (uri.scheme == "file") {
                             val oldFile = File(uri.path!!)
                             if (oldFile.exists()) {
-                                val newFile = File(context.filesDir, "bg_${UUID.randomUUID()}.jpg")
+                                val newFile = File(eventImagesDir(context), "$prefix${UUID.randomUUID()}.jpg")
                                 oldFile.copyTo(newFile)
-                                newBgUri = Uri.fromFile(newFile).toString()
-                            }
-                        }
+                                Uri.fromFile(newFile).toString()
+                            } else uriStr
+                        } else uriStr
+                    } catch (_: Exception) {
+                        uriStr
                     }
-                    event.widgetImageUri?.let { uriStr ->
-                        val uri = uriStr.toUri()
-                        if (uri.scheme == "file") {
-                            val oldFile = File(uri.path!!)
-                            if (oldFile.exists()) {
-                                val newFile = File(context.filesDir, "widget_${UUID.randomUUID()}.jpg")
-                                oldFile.copyTo(newFile)
-                                newWidgetUri = Uri.fromFile(newFile).toString()
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
+
+                val newBgUris = event.getBgImageUris().map { copyImage(it, "bg_") }
+                val newSquareUris = event.backgroundSquareImageUris?.map { copyImage(it, "sq_") }
+                val newBgUri = newBgUris.firstOrNull() ?: event.backgroundImageUri
+                val newWidgetUri = event.widgetImageUri?.let { copyImage(it, "widget_") }
 
                 val newEvent = event.copy(
                     id = UUID.randomUUID().toString(),
                     name = "${event.name}$copySuffix",
                     backgroundImageUri = newBgUri,
+                    backgroundImageUris = newBgUris.ifEmpty { null },
+                    backgroundSquareImageUris = newSquareUris ?: event.backgroundSquareImageUris,
                     widgetImageUri = newWidgetUri,
                     createdAt = System.currentTimeMillis()
                 )
@@ -611,44 +675,162 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
-            // Custom Top Bar Area
+            // While the search is open the field and the search button share one silhouette: the
+            // corners facing each other are squared off so both backgrounds read as a single bar.
+            val searchFieldShape = RoundedCornerShape(topStart = 12.dp, topEnd = 0.dp, bottomEnd = 0.dp, bottomStart = 12.dp)
+            val searchButtonShape = if (isSearchActive) {
+                RoundedCornerShape(topStart = 0.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 0.dp)
+            } else {
+                RoundedCornerShape(12.dp)
+            }
+
+            // Custom Top Bar Area (the search field unfolds from the search button while the
+            // app title fades out)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier
-                        .width(220.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                        .padding(vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 20.sp)
-                    Text(
-                        text = "${stringResource(R.string.current_time)}${currentTick.format(formatter)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                BoxWithConstraints(modifier = Modifier.weight(1f)) {
+                    // Full width the search field reaches once it is open: the space left of the buttons.
+                    val searchFieldMaxWidth = maxWidth
+
+                    // Width of the search field: it grows out of the left edge of the search button.
+                    val searchFieldWidth by animateDpAsState(
+                        targetValue = if (isSearchActive) searchFieldMaxWidth else 0.dp,
+                        animationSpec = tween(durationMillis = 300),
+                        label = "searchFieldWidth"
                     )
+                    val titleAlpha by animateFloatAsState(
+                        targetValue = if (isSearchActive) 0f else 1f,
+                        animationSpec = tween(durationMillis = 300),
+                        label = "searchTitleAlpha"
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .width(220.dp)
+                            .alpha(titleAlpha)
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                            .padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            text = "${stringResource(R.string.current_time)}${currentTick.format(formatter)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Search field: fused with the search button into one bar, unfolding to the
+                    // left of it. The content keeps its full width, so it is only revealed.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(searchFieldWidth)
+                            .height(48.dp)
+                            .clip(searchFieldShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .requiredWidth(searchFieldMaxWidth)
+                                .height(48.dp)
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.search_hint),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                BasicTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(searchFocusRequester),
+                                    singleLine = true,
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onPrimaryContainer),
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.onPrimaryContainer),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
+                                )
+                            }
+                            if (searchQuery.isNotEmpty()) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.search_clear),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .clickable { searchQuery = "" }
+                                )
+                            }
+                        }
+                    }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .clickable {
-                            if (navController.currentDestination?.route == "home") {
-                                navController.navigate("settings")
-                            }
-                        },
-                    contentAlignment = Alignment.Center
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    // Search Button (merges with the field into a single shape while searching)
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(searchButtonShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .clickable {
+                                if (isSearchActive) {
+                                    isSearchActive = false
+                                    searchQuery = ""
+                                } else {
+                                    isSearchActive = true
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = stringResource(if (isSearchActive) R.string.cancel else R.string.search),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
+                    // Settings Button
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .clickable {
+                                if (navController.currentDestination?.route == "home") {
+                                    navController.navigate("settings")
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
                 }
             }
 
@@ -799,7 +981,20 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
 
             if (events.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.add_new_event), color = MaterialTheme.colorScheme.outline)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (isSearchActive && searchQuery.isNotBlank()) {
+                            Icon(
+                                imageVector = Icons.Default.SearchOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(40.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(stringResource(R.string.search_no_results), color = MaterialTheme.colorScheme.outline)
+                        } else {
+                            Text(stringResource(R.string.add_new_event), color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
                 }
             } else {
                 AnimatedContent(
@@ -858,28 +1053,15 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                         onClick = {
                             eventToDelete?.let { event ->
                                 val id = event.id
-                                val newList = events.filter { it.id != id }
+                                // Always rebuild from the unfiltered list, otherwise deleting while a
+                                // search is active would also drop every card that is filtered out.
+                                val newList = rawEvents.filter { it.id != id }
                                 scope.launch { 
                                     dataManager.saveEvents(newList)
                                     NotificationHelper.cancelNotification(context, id)
                                     
-                                    // Delete associated image files
-                                    try {
-                                        event.backgroundImageUri?.let { uriStr ->
-                                            val uri = uriStr.toUri()
-                                            if (uri.scheme == "file") {
-                                                val file = File(uri.path ?: return@let)
-                                                if (file.exists()) file.delete()
-                                            }
-                                        }
-                                        event.widgetImageUri?.let { uriStr ->
-                                            val uri = uriStr.toUri()
-                                            if (uri.scheme == "file") {
-                                                val file = File(uri.path ?: return@let)
-                                                if (file.exists()) file.delete()
-                                            }
-                                        }
-                                    } catch (_: Exception) {}
+                                    // Delete the images that belong to this card
+                                    deleteEventImageFiles(event)
                                 }
                             }
                             eventToDelete = null
@@ -948,15 +1130,33 @@ fun SettingsScreen(
                             }
 
                             backup.events.forEach { event ->
-                                event.backgroundImageUri?.let { uriStr ->
+                                // Export every stacked background image (multi-image cards)
+                                event.getBgImageUris().forEachIndexed { index, uriStr ->
                                     if (!uriStr.startsWith("images/")) {
-                                        val entryName = "images/${event.id}_bg"
+                                        // Keep the legacy "${id}_bg" key for the first image
+                                        val key = if (index == 0) "${event.id}_bg" else "${event.id}_bg_$index"
+                                        val entryName = "images/$key"
                                         try {
                                             resolver.openInputStream(uriStr.toUri())?.use { input ->
                                                 zos.putNextEntry(ZipEntry(entryName))
                                                 input.copyTo(zos)
                                                 zos.closeEntry()
-                                                zipImages["${event.id}_bg"] = entryName
+                                                zipImages[key] = entryName
+                                            }
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                                // Export the square crops used by the grid ("small card") layout
+                                event.backgroundSquareImageUris?.forEachIndexed { index, uriStr ->
+                                    if (!uriStr.startsWith("images/")) {
+                                        val key = "${event.id}_sq_$index"
+                                        val entryName = "images/$key"
+                                        try {
+                                            resolver.openInputStream(uriStr.toUri())?.use { input ->
+                                                zos.putNextEntry(ZipEntry(entryName))
+                                                input.copyTo(zos)
+                                                zos.closeEntry()
+                                                zipImages[key] = entryName
                                             }
                                         } catch (_: Exception) {}
                                     }
@@ -995,8 +1195,17 @@ fun SettingsScreen(
                             val backupForZip = backup.copy(
                                 appBackgroundImage = zipAppBgName ?: backup.appBackgroundImage,
                                 events = backup.events.map { event ->
+                                    val zippedBgUris = event.getBgImageUris().mapIndexed { index, uriStr ->
+                                        val key = if (index == 0) "${event.id}_bg" else "${event.id}_bg_$index"
+                                        zipImages[key] ?: uriStr
+                                    }
+                                    val zippedSquareUris = event.backgroundSquareImageUris?.mapIndexed { index, uriStr ->
+                                        zipImages["${event.id}_sq_$index"] ?: uriStr
+                                    }
                                     event.copy(
-                                        backgroundImageUri = zipImages["${event.id}_bg"] ?: event.backgroundImageUri,
+                                        backgroundImageUri = zippedBgUris.firstOrNull() ?: event.backgroundImageUri,
+                                        backgroundImageUris = if (zippedBgUris.size > 1) zippedBgUris else event.backgroundImageUris,
+                                        backgroundSquareImageUris = zippedSquareUris,
                                         widgetImageUri = zipImages["${event.id}_widget"] ?: event.widgetImageUri,
                                         customFontPath = zipFonts[event.customFontPath] ?: event.customFontPath
                                     )
@@ -1044,7 +1253,7 @@ fun SettingsScreen(
                             
                             if (backupJson != null) {
                                 val backup = Json.decodeFromString<BackupData>(backupJson)
-                                val imagesDir = File(context.filesDir, "imported_images").apply { mkdirs() }
+                                val imagesDir = File(context.filesDir, IMPORTED_IMAGES_DIR_NAME).apply { mkdirs() }
                                 val fontsDir = File(context.filesDir, "imported_fonts").apply { mkdirs() }
                                 
                                 var restoredAppBg = backup.appBackgroundImage
@@ -1057,17 +1266,32 @@ fun SettingsScreen(
                                 }
 
                                 val restoredEvents = backup.events.map { event ->
-                                    var bgUri = event.backgroundImageUri
+                                    // Restore every stacked background image (multi-image cards)
+                                    val restoredBgUris = event.getBgImageUris().mapIndexed { index, uriStr ->
+                                        if (uriStr.startsWith("images/")) {
+                                            // Legacy backups stored the first image as "images/{id}_bg"
+                                            val data = imageFiles[uriStr]
+                                                ?: if (index == 0) imageFiles["images/${event.id}_bg"] else null
+                                            if (data != null) {
+                                                val file = File(imagesDir, "${event.id}_bg_$index")
+                                                file.writeBytes(data)
+                                                Uri.fromFile(file).toString()
+                                            } else uriStr
+                                        } else uriStr
+                                    }
+                                    val bgUri = restoredBgUris.firstOrNull() ?: event.backgroundImageUri
+                                    val restoredSquareUris = event.backgroundSquareImageUris?.mapIndexed { index, uriStr ->
+                                        if (uriStr.startsWith("images/")) {
+                                            imageFiles[uriStr]?.let { data ->
+                                                val file = File(imagesDir, "${event.id}_sq_$index")
+                                                file.writeBytes(data)
+                                                Uri.fromFile(file).toString()
+                                            } ?: uriStr
+                                        } else uriStr
+                                    }
                                     var widgetUri = event.widgetImageUri
                                     var fontPath = event.customFontPath
-                                    
-                                    if (bgUri?.startsWith("images/") == true) {
-                                        imageFiles[bgUri]?.let { data ->
-                                            val file = File(imagesDir, "${event.id}_bg")
-                                            file.writeBytes(data)
-                                            bgUri = Uri.fromFile(file).toString()
-                                        }
-                                    }
+
                                     if (widgetUri?.startsWith("images/") == true) {
                                         imageFiles[widgetUri]?.let { data ->
                                             val file = File(imagesDir, "${event.id}_widget")
@@ -1084,7 +1308,9 @@ fun SettingsScreen(
                                         }
                                     }
                                     event.copy(
-                                        backgroundImageUri = bgUri, 
+                                        backgroundImageUri = bgUri,
+                                        backgroundImageUris = if (restoredBgUris.size > 1) restoredBgUris else event.backgroundImageUris,
+                                        backgroundSquareImageUris = restoredSquareUris,
                                         widgetImageUri = widgetUri,
                                         customFontPath = fontPath
                                     )
@@ -1344,7 +1570,13 @@ fun SettingsScreen(
                         
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (appBgImage != null) {
-                                IconButton(onClick = { scope.launch { dataManager.setAppBackgroundImage(null) } }) {
+                                IconButton(onClick = {
+                                    val removedUri = appBgImage
+                                    scope.launch {
+                                        dataManager.setAppBackgroundImage(null)
+                                        localImageFileOf(removedUri)?.delete()
+                                    }
+                                }) {
                                     Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
                                 }
                             }
@@ -1797,34 +2029,39 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     }
 
     // Use rememberSaveable to persist state across navigation and configuration changes
-    var isInitialized by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf(false) }
+    var isInitialized by rememberSaveable(eventId) { mutableStateOf(false) }
 
-    var name by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("") }
+    var name by rememberSaveable(eventId) { mutableStateOf("") }
     var nameError by remember { mutableStateOf(false) }
     
     // Custom Savers for LocalDate, LocalTime, and List<Int>
-    val localDateSaver = androidx.compose.runtime.saveable.Saver<LocalDate, String>(
+    val localDateSaver = Saver<LocalDate, String>(
         save = { it.toString() },
         restore = { LocalDate.parse(it) }
     )
-    val localTimeSaver = androidx.compose.runtime.saveable.Saver<LocalTime, String>(
+    val localTimeSaver = Saver<LocalTime, String>(
         save = { it.toString() },
         restore = { LocalTime.parse(it) }
     )
-    val intListSaver = androidx.compose.runtime.saveable.Saver<List<Int>, String>(
+    val intListSaver = Saver<List<Int>, String>(
         save = { it.joinToString(",") },
         restore = { if (it.isEmpty()) emptyList() else it.split(",").map { s -> s.toInt() } }
     )
+    // Image URI lists are stored as a JSON array, since a List<String> is not Bundle friendly on its own
+    val stringListSaver = Saver<List<String>, String>(
+        save = { Json.encodeToString(it) },
+        restore = { try { Json.decodeFromString<List<String>>(it) } catch (_: Exception) { emptyList() } }
+    )
 
-    var selectedDate by androidx.compose.runtime.saveable.rememberSaveable(eventId, stateSaver = localDateSaver) { mutableStateOf(LocalDate.now().plusDays(1)) }
-    var selectedTime by androidx.compose.runtime.saveable.rememberSaveable(eventId, stateSaver = localTimeSaver) { mutableStateOf(LocalTime.of(0, 0)) }
-    var selectedColorHex by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
+    var selectedDate by rememberSaveable(eventId, stateSaver = localDateSaver) { mutableStateOf(LocalDate.now().plusDays(1)) }
+    var selectedTime by rememberSaveable(eventId, stateSaver = localTimeSaver) { mutableStateOf(LocalTime.of(0, 0)) }
+    var selectedColorHex by rememberSaveable(eventId) { mutableStateOf<String?>(null) }
     
-    var notificationContent by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("") }
-    var reminderMinutes by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableIntStateOf(-1) }
-    var repeatType by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("none") }
-    var repeatInterval by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("1") }
-    var repeatUnit by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf("days") }
+    var notificationContent by rememberSaveable(eventId) { mutableStateOf("") }
+    var reminderMinutes by rememberSaveable(eventId) { mutableIntStateOf(-1) }
+    var repeatType by rememberSaveable(eventId) { mutableStateOf("none") }
+    var repeatInterval by rememberSaveable(eventId) { mutableStateOf("1") }
+    var repeatUnit by rememberSaveable(eventId) { mutableStateOf("days") }
     var isRepeatMenuExpanded by remember { mutableStateOf(false) }
     var isRepeatUnitMenuExpanded by remember { mutableStateOf(false) }
 
@@ -1860,16 +2097,37 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    var backgroundImageUri by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
-    var widgetImageUri by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
-    var backgroundBrightness by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableFloatStateOf(0.5f) }
-    var customFontPath by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
-    var customFontName by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf<String?>(null) }
+    // These four have to survive navigation: opening the color picker (or the image picker)
+    // leaves this destination, and plain remember state comes back empty. That used to
+    // silently drop the picture that had just been selected and made the color change land on
+    // the card instead.
+    var backgroundImageUri by rememberSaveable(eventId) { mutableStateOf(initialEvent?.backgroundImageUri) }
+    var backgroundImageUris by rememberSaveable(eventId, stateSaver = stringListSaver) { mutableStateOf(initialEvent?.getBgImageUris() ?: emptyList()) }
+    // Square (1:1) crops used by the grid / "small card" layout
+    var backgroundSquareImageUris by rememberSaveable(eventId, stateSaver = stringListSaver) { mutableStateOf(initialEvent?.backgroundSquareImageUris ?: emptyList()) }
+    var widgetImageUri by rememberSaveable(eventId) { mutableStateOf(initialEvent?.widgetImageUri) }
+    var backgroundBrightness by rememberSaveable(eventId) { mutableFloatStateOf(0.5f) }
+    var customFontPath by rememberSaveable(eventId) { mutableStateOf<String?>(null) }
+    var customFontName by rememberSaveable(eventId) { mutableStateOf<String?>(null) }
     
-    var isExcludeEnabled by androidx.compose.runtime.saveable.rememberSaveable(eventId) { mutableStateOf(false) }
-    var selectedExcludedDays by androidx.compose.runtime.saveable.rememberSaveable(eventId, stateSaver = intListSaver) { mutableStateOf(emptyList()) }
+    var isExcludeEnabled by rememberSaveable(eventId) { mutableStateOf(false) }
+    var selectedExcludedDays by rememberSaveable(eventId, stateSaver = intListSaver) { mutableStateOf(emptyList()) }
     
     var cropOriginalUri by remember { mutableStateOf<Uri?>(null) }
+    var cropOriginalUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var currentCropIndex by remember { mutableIntStateOf(0) }
+    var croppedResultUris by remember { mutableStateOf<List<String>>(emptyList()) }
+    // Square (1:1) crops collected while going through the selected photos
+    var croppedSquareResultUris by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // A card keeps its picture either in the stacked list or, when a single image was picked, only
+    // in the single-URI field. Mirrors CountdownEvent.getBgImageUris(), so the "image & color" tab
+    // shows the picture controls for both cases instead of only for stacked cards.
+    val editorImageUris = if (backgroundImageUris.isNotEmpty()) {
+        backgroundImageUris.filter { it.isNotBlank() }
+    } else {
+        listOfNotNull(backgroundImageUri?.takeIf { it.isNotBlank() })
+    }
 
     // Initialization logic from Database
     val currentPrimary = MaterialTheme.colorScheme.primary
@@ -1891,6 +2149,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 repeatInterval = initialEvent.repeatInterval?.toString() ?: "1"
                 repeatUnit = initialEvent.repeatUnit ?: "days"
                 backgroundImageUri = initialEvent.backgroundImageUri
+                backgroundImageUris = initialEvent.getBgImageUris()
+                backgroundSquareImageUris = initialEvent.backgroundSquareImageUris ?: emptyList()
                 widgetImageUri = initialEvent.widgetImageUri
                 backgroundBrightness = initialEvent.backgroundBrightness
                 customFontPath = initialEvent.customFontPath
@@ -1916,10 +2176,36 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
             // ONLY clear image and start crop if we got a result, and we are not currently cropping that same URI
             if (cropOriginalUri?.toString() != uriStr) {
                 backgroundImageUri = null
+                backgroundImageUris = emptyList()
+                backgroundSquareImageUris = emptyList()
                 widgetImageUri = null
+                cropOriginalUris = emptyList()
                 cropOriginalUri = uriStr.toUri()
                 backStackEntry.savedStateHandle.remove<String>("selected_image_uri")
             }
+        }
+    }
+
+    val urisPickerResult = backStackEntry.savedStateHandle.getStateFlow<String?>("selected_image_uris", null).collectAsState()
+    LaunchedEffect(urisPickerResult.value) {
+        urisPickerResult.value?.let { jsonStr ->
+            try {
+                val list = Json.decodeFromString<List<String>>(jsonStr).map { it.toUri() }
+                if (list.isNotEmpty()) {
+                    backgroundImageUris = emptyList()
+                    backgroundSquareImageUris = emptyList()
+                    backgroundImageUri = null
+                    widgetImageUri = null
+                    cropOriginalUri = null
+                    cropOriginalUris = list
+                    currentCropIndex = 0
+                    croppedResultUris = emptyList()
+                    croppedSquareResultUris = emptyList()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            backStackEntry.savedStateHandle.remove<String>("selected_image_uris")
         }
     }
 
@@ -2018,6 +2304,9 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 val currentEvents = dataManager.events.first()
                 val existingEvent = if (eventId != null) currentEvents.find { it.id == eventId } else null
                 
+                // Keep the single-URI field in sync with the first stacked image
+                val finalBgUris = backgroundImageUris.filter { it.isNotBlank() }
+                val finalSquareUris = backgroundSquareImageUris.filter { it.isNotBlank() }
                 val finalEvent = CountdownEvent(
                     id = eventId ?: UUID.randomUUID().toString(),
                     name = name,
@@ -2028,8 +2317,10 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     repeatType = repeatType,
                     repeatInterval = if (repeatType == "custom") repeatInterval.toIntOrNull() ?: 1 else null,
                     repeatUnit = if (repeatType == "custom") repeatUnit else null,
-                    backgroundImageUri = backgroundImageUri,
-                    widgetImageUri = widgetImageUri,
+                    backgroundImageUri = finalBgUris.firstOrNull() ?: backgroundImageUri,
+                    backgroundImageUris = finalBgUris.ifEmpty { null },
+                    backgroundSquareImageUris = finalSquareUris.ifEmpty { null },
+                    widgetImageUri = widgetImageUri ?: finalSquareUris.firstOrNull(),
                     backgroundBrightness = backgroundBrightness,
                     customFontPath = customFontPath,
                     createdAt = existingEvent?.createdAt ?: System.currentTimeMillis(),
@@ -2184,7 +2475,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
             }
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
@@ -2194,14 +2485,19 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
-                    .height(200.dp)
+                // No fixed height here: a card with several pictures is taller than its front
+                // face, because the peeking layers live in the strip above the card, and a long
+                // title wraps to a second line. Clamping this slot would squeeze the card and
+                // cut the countdown line off.
             ) {
+                val previewBgUris = backgroundImageUris.filter { it.isNotBlank() }
                 val previewEvent = CountdownEvent(
                     id = "preview",
                     name = name.ifBlank { stringResource(R.string.event_name) },
                     targetDateTime = LocalDateTime.of(selectedDate, selectedTime).toString(),
                     colorHex = selectedColorHex,
-                    backgroundImageUri = backgroundImageUri,
+                    backgroundImageUri = previewBgUris.firstOrNull() ?: backgroundImageUri,
+                    backgroundImageUris = previewBgUris.ifEmpty { null },
                     widgetImageUri = widgetImageUri,
                     backgroundBrightness = backgroundBrightness,
                     createdAt = initialEvent?.createdAt ?: System.currentTimeMillis(),
@@ -2213,28 +2509,34 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     customFontPath = customFontPath,
                     excludedDays = if (isExcludeEnabled) selectedExcludedDays.ifEmpty { null } else null
                 )
-                Box(modifier = Modifier.onGloballyPositioned { coordinates ->
-                    if (coordinates.size.width > 0) {
-                        largeCardRatio = coordinates.size.height.toFloat() / coordinates.size.width.toFloat()
-                    }
-                }) {
+                Box {
                     CountdownItem(
                         event = previewEvent,
                         onEdit = {},
                         onDelete = {},
                         onCopy = {},
                         showActions = false,
-                        now = previewNow
+                        now = previewNow,
+                        onCardMeasured = { cardWidth, cardHeight ->
+                            if (cardWidth > 0 && cardHeight > 0) {
+                                largeCardRatio = cardHeight.toFloat() / cardWidth.toFloat()
+                            }
+                        }
                     )
                 }
             }
 
-            // Pager for swipeable settings (Starts below preview card)
+            // 16dp spacer plus the 16dp bottom padding of the preview slot give the settings
+            // the same 32dp of breathing room that the pager used to get from its hardcoded
+            // top offset.
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Pager for swipeable settings (Fills the space left under the preview card)
             androidx.compose.foundation.pager.HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 232.dp), // Height of preview card (200dp) + padding (32dp)
+                    .fillMaxWidth()
+                    .weight(1f),
                 verticalAlignment = Alignment.Top
             ) { page ->
                 Column(
@@ -2506,25 +2808,20 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                                             )
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                if (backgroundImageUri != null) {
+                                                if (editorImageUris.isNotEmpty()) {
+                                                    Text(
+                                                        text = stringResource(R.string.image_count, editorImageUris.size),
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                                        modifier = Modifier.padding(end = 8.dp)
+                                                    )
                                                     IconButton(
                                                         onClick = {
-                                                            try {
-                                                                backgroundImageUri?.let { uriStr ->
-                                                                    val uri = uriStr.toUri()
-                                                                    if (uri.scheme == "file") {
-                                                                        val file = File(uri.path ?: return@let)
-                                                                        if (file.exists()) file.delete()
-                                                                    }
-                                                                }
-                                                                widgetImageUri?.let { uriStr ->
-                                                                    val uri = uriStr.toUri()
-                                                                    if (uri.scheme == "file") {
-                                                                        val file = File(uri.path ?: return@let)
-                                                                        if (file.exists()) file.delete()
-                                                                    }
-                                                                }
-                                                            } catch (_: Exception) {}
+                                                            // Only drop the references here. The files themselves are
+                                                            // reclaimed by pruneOrphanImages(), so backing out of the
+                                                            // editor without saving can never lose an existing image.
+                                                            backgroundImageUris = emptyList()
+                                                            backgroundSquareImageUris = emptyList()
                                                             backgroundImageUri = null
                                                             widgetImageUri = null
                                                         },
@@ -2535,7 +2832,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                 } else {
                                                     IconButton(
                                                         onClick = {
-                                                            navController.navigate("image_picker")
+                                                            navController.navigate("image_picker?allowMulti=true")
                                                         },
                                                         modifier = Modifier.size(40.dp)
                                                     ) {
@@ -2550,7 +2847,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                         }
 
                                         AnimatedVisibility(
-                                            visible = backgroundImageUri != null,
+                                            visible = editorImageUris.isNotEmpty(),
                                             enter = fadeIn() + expandVertically(),
                                             exit = fadeOut() + shrinkVertically()
                                         ) {
@@ -2951,33 +3248,139 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
         }
     }
 
-    if (cropOriginalUri != null) {
+    if (cropOriginalUris.isNotEmpty() && currentCropIndex < cropOriginalUris.size) {
+        ImageCropOverlay(
+            originalUri = cropOriginalUris[currentCropIndex],
+            initialRatio = largeCardRatio,
+            showRatioToggle = true,
+            // Every selected photo is cropped twice: once for the list ("large card")
+            // layout and once square for the grid ("small card") layout.
+            singleStepOnly = false,
+            stepLabel = if (cropOriginalUris.size > 1) "${currentCropIndex + 1}/${cropOriginalUris.size}" else null,
+            onCropDone = { croppedUriStr, isSecondStep ->
+                if (!isSecondStep) {
+                    croppedResultUris = croppedResultUris + croppedUriStr
+                } else {
+                    croppedSquareResultUris = croppedSquareResultUris + croppedUriStr
+                    if (currentCropIndex + 1 < cropOriginalUris.size) {
+                        currentCropIndex++
+                    } else {
+                        backgroundImageUris = croppedResultUris
+                        backgroundImageUri = croppedResultUris.firstOrNull()
+                        backgroundSquareImageUris = croppedSquareResultUris
+                        // The 2x2 home screen widget also shows a square image
+                        widgetImageUri = croppedSquareResultUris.firstOrNull() ?: widgetImageUri
+                        cropOriginalUris = emptyList()
+                    }
+                }
+            },
+            onDismiss = { cropOriginalUris = emptyList() },
+            onReselect = {
+                cropOriginalUris = emptyList()
+                navController.navigate("image_picker?allowMulti=true")
+            }
+        )
+    } else if (cropOriginalUri != null) {
         ImageCropOverlay(
             originalUri = cropOriginalUri!!,
             initialRatio = largeCardRatio,
             showRatioToggle = true,
+            singleStepOnly = false,
             onCropDone = { uri, isSecondStep ->
                 if (!isSecondStep) {
                     backgroundImageUri = uri
-                    // Auto-trigger widget crop (1:1)
-                    // We need a way to tell the overlay to continue to the next step
                 } else {
                     widgetImageUri = uri
+                    backgroundSquareImageUris = listOf(uri)
                     cropOriginalUri = null
                 }
             },
             onDismiss = { cropOriginalUri = null },
             onReselect = {
                 cropOriginalUri = null
-                navController.navigate("image_picker")
+                navController.navigate("image_picker?allowMulti=true")
             }
         )
     }
 }
 
+/** Linearly interpolates between two [Dp] values. */
+private fun interpolateDp(start: Dp, stop: Dp, fraction: Float): Dp = start + (stop - start) * fraction
 
+/**
+ * Masks the drawing of this node (its children included) to its own bounds, plus a small
+ * bleed so the 2dp elevation shadow of the card survives the mask.
+ *
+ * Compose never clips a node to its own bounds and the lazy lists only clip their viewport,
+ * so a card that is dragged out of its slot would be drawn on top of the neighboring cards.
+ * The masked rectangle is anchored to the node itself, which is why this has to be applied
+ * *before* (outside) the graphics layer that translates the card.
+ */
+private fun Modifier.clipToBoundsWithBleed(bleed: Dp = 4.dp): Modifier = this.drawWithContent {
+    val bleedPx = bleed.toPx()
+    clipRect(-bleedPx, -bleedPx, size.width + bleedPx, size.height + bleedPx) {
+        this@drawWithContent.drawContent()
+    }
+}
 
-
+/**
+ * One of the cards sitting behind the front card of a countdown card stack.
+ *
+ * The (dimmed) background picture is always drawn: those layers are the preview of the
+ * pictures waiting behind the front card. A layer can also carry the labels of its card
+ * ([labels], painted with [labelsAlpha]), which lets them cross-fade with the labels of the
+ * front card while the layer steps up to the front position. Callers have to pass
+ * `Modifier.matchParentSize()` so that every layer is measured exactly like the front card
+ * and the stack can be animated without relayouting.
+ *
+ * [scaleX] is applied around the center of the layer, which keeps the layers centered and
+ * their height identical to the front card (the vertical scale is never touched, so the
+ * bottom of the stack never opens up).
+ */
+@Composable
+private fun StackLayer(
+    imageUri: String,
+    shape: Shape,
+    scaleX: Float,
+    topOffset: Dp,
+    dimAlpha: Float,
+    layerAlpha: Float,
+    modifier: Modifier = Modifier,
+    shadowElevation: Dp = 0.dp,
+    // Labels of the card this layer stands for. Only the layer that is about to take the front
+    // position gets them, so they cross-fade with the labels of the front card.
+    labels: (@Composable BoxScope.(Float) -> Unit)? = null,
+    labelsAlpha: Float = 0f
+) {
+    Box(
+        modifier = modifier
+            // The offset stays outside the graphics layer so the layer never draws
+            // outside its own bounds (the peek lives in the padding of the stack).
+            .offset(y = topOffset)
+            .graphicsLayer {
+                this.scaleX = scaleX
+                this.alpha = layerAlpha
+            }
+            .shadow(elevation = shadowElevation, shape = shape)
+            .clip(shape)
+            .background(Color.Black)
+    ) {
+        AsyncImage(
+            model = imageUri,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            // Counter the horizontal squeeze of the stack, so the picture keeps its ratio
+            // and is cropped by the layer bounds instead of being distorted.
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer { this.scaleX = if (scaleX > 0f) 1f / scaleX else 1f }
+        )
+        Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = dimAlpha))) {}
+        if (labels != null && labelsAlpha > 0f) {
+            labels(labelsAlpha)
+        }
+    }
+}
 
 @Composable
 fun CountdownItem(
@@ -2986,7 +3389,10 @@ fun CountdownItem(
     showActions: Boolean = true,
     onEdit: () -> Unit = {},
     onDelete: () -> Unit = {},
-    onCopy: () -> Unit = {}
+    onCopy: () -> Unit = {},
+    // Reports the measured size of the card itself (without the stacked peek strip),
+    // so the crop overlay can use the exact card aspect ratio.
+    onCardMeasured: ((Int, Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -3027,7 +3433,10 @@ fun CountdownItem(
 
     val customColor = event.colorHex?.let { try { Color(it.toColorInt()) } catch(_:Exception) { null } }
     val baseColor = customColor ?: MaterialTheme.colorScheme.primary
-    val hasImage = event.backgroundImageUri != null
+    val imageUris = event.getBgImageUris()
+    var currentImageIndex by remember(imageUris) { mutableIntStateOf(0) }
+    val count = imageUris.size
+    val hasImage = count > 0
     val cardBgColor = if (hasImage) Color.Black else baseColor
     val titleColor = if (hasImage) (customColor ?: Color.White) else {
         val luminance = baseColor.red * 0.299f + baseColor.green * 0.587f + baseColor.blue * 0.114f
@@ -3040,119 +3449,326 @@ fun CountdownItem(
 
     val shareErrorMsg = stringResource(R.string.share_error)
 
-    Card(
+    // Reserve a strip above the card so the back layers of the stack can peek out with their
+    // own rounded tops (the card shape would otherwise cut them off). The strip also keeps the
+    // layers from overlapping the neighboring cards in the list.
+    val stackPeek = when {
+        count >= 3 -> 24.dp
+        count == 2 -> 12.dp
+        else -> 0.dp
+    }
+    val stackStep = if (count >= 3) 12.dp else stackPeek
+    val cardShape = RoundedCornerShape(28.dp)
+    val stackShape = RoundedCornerShape(12.dp)
+
+    // Vertical drag of the front card. The whole card follows the drag, its content
+    // included, so a swipe makes the full card stacked behind step up to the front instead
+    // of only swapping the picture inside the card.
+    val offsetY = remember { Animatable(0f) }
+    var cardHeightPx by remember { mutableFloatStateOf(0f) }
+
+    // 0f = resting stack, 1f = the front card traveled a whole card height.
+    val swipeProgress = if (cardHeightPx > 0f) {
+        (offsetY.value.absoluteValue / cardHeightPx).coerceIn(0f, 1f)
+    } else 0f
+    val isSwipingUp = offsetY.value < 0f
+    val isSwipingDown = offsetY.value > 0f
+    // The stack only steps forward while swiping up, towards the next picture.
+    val advance = if (isSwipingUp) swipeProgress else 0f
+    // While swiping down the back layers are already rendered the way they will look after
+    // the swap, so the peeking pictures never pop at the end of the gesture.
+    val deckBase = if (isSwipingDown) (currentImageIndex - 1 + count) % count else currentImageIndex
+    // Deepest slot of the stack that is occupied at rest (1 with two pictures, 2 from three).
+    val deepestSlot = if (count >= 3) 2 else 1
+    val deepestScale = if (count >= 3) 0.82f else 0.91f
+    val deepestOffset = if (count >= 3) -stackPeek else -stackStep
+    val belowScale = if (count >= 3) 0.73f else 0.82f
+    val belowOffset = if (count >= 3) -(stackPeek + stackStep) else -stackPeek
+
+    // Cross-fade of the labels while a card is dragged away: the labels of the card that
+    // leaves the front position dim out while the labels of the card taking its place come
+    // back. Both alphas always add up to one, so the text never blinks on its own and the
+    // hand-over is seamless: when the index swaps, the labels behind are already at full
+    // alpha on the card that takes over.
+    val labelTravel = if (cardHeightPx > 0f) {
+        (offsetY.value.absoluteValue / (cardHeightPx * 0.5f)).coerceIn(0f, 1f)
+    } else 0f
+    // Smoothed, so the labels are gone before the card reaches the end of its travel.
+    val incomingLabelsAlpha = labelTravel * labelTravel * (3f - 2f * labelTravel)
+    val outgoingLabelsAlpha = 1f - incomingLabelsAlpha
+
+    // Everything that is printed on the card: the title, the target date, the countdown and
+    // the small badges. The front card draws them, and so does the stack layer that takes its
+    // place while a swipe is running, which is what lets the two copies cross-fade.
+    val cardLabels: @Composable BoxScope.(Float) -> Unit = { labelsAlpha ->
+        if (count > 1) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .alpha(labelsAlpha)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    tint = titleColor,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = "${currentImageIndex + 1}/$count",
+                    color = titleColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = customFontFamily
+                )
+            }
+        }
+        Column(modifier = Modifier.alpha(labelsAlpha).padding(24.dp).fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = event.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = titleColor, fontFamily = customFontFamily)
+                    Text(text = "${stringResource(R.string.target)}${target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))}", style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+            Column {
+                if (duration.isNegative) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        val (value, unit) = when {
+                            kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
+                            kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
+                            else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
+                        }
+                        Text(text = value, fontSize = 56.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 56.sp, fontFamily = customFontFamily)
+                        Text(text = unit + stringResource(R.string.ago_suffix), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp), fontFamily = customFontFamily)
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
+                        Text(text = days.toString(), fontSize = 56.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 56.sp, fontFamily = customFontFamily)
+                        Text(text = stringResource(R.string.unit_days), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp), fontFamily = customFontFamily)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                            Text(text = hours.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
+                            Text(text = stringResource(R.string.unit_hours), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp, end = 8.dp), fontFamily = customFontFamily)
+                            Text(text = minutes.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
+                            Text(text = stringResource(R.string.unit_minutes), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp, end = 8.dp), fontFamily = customFontFamily)
+                            if (days == 0L && hours == 0L) {
+                                Text(text = seconds.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
+                                Text(text = stringResource(R.string.unit_seconds), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp), fontFamily = customFontFamily)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (!isExporting && (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none"))) {
+            Row(modifier = Modifier.align(Alignment.BottomEnd).alpha(labelsAlpha).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (event.reminderMinutesBefore != null) {
+                    Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                }
+                if (event.repeatType != null && event.repeatType != "none") {
+                    Icon(imageVector = Icons.Default.Repeat, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            // Mask for the whole stack (the peeking layers live in the padding, which is part
+            // of these bounds): it keeps every layer, and the card dragged out of its slot,
+            // inside this item.
+            .clipToBoundsWithBleed()
+            // The capture sits above the padding so the bitmap exported by "share"
+            // also contains the stacked layers peeking out above the card.
             .drawWithContent {
                 graphicsLayer.record {
                     this@drawWithContent.drawContent()
                 }
                 drawLayer(graphicsLayer)
             }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onLongPress = { offset ->
-                        if (showActions) {
-                            pressOffset = offset
-                            expanded = true
-                        }
-                    }
-                )
-            },
-        shape = RoundedCornerShape(28.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = cardBgColor)
+            .padding(top = stackPeek)
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.offset { IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) }.size(0.dp)) {
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.edit_card)) },
-                        leadingIcon = { Icon(Icons.Default.Edit, null) },
-                        onClick = { expanded = false; onEdit() }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.copy)) },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
-                        onClick = { expanded = false; onCopy() }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.share)) },
-                        leadingIcon = { Icon(Icons.Default.Share, null) },
-                        onClick = {
-                            expanded = false
-                            scope.launch {
-                                try {
-                                    isExporting = true
-                                    delay(100.milliseconds)
-                                    val bitmap = graphicsLayer.toImageBitmap()
-                                    saveEventAsImage(context, bitmap)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, shareErrorMsg.format(e.message), Toast.LENGTH_LONG).show()
-                                } finally {
-                                    isExporting = false
+        // Card fading in at the very back so the stack stays filled while the other cards
+        // move one slot towards the front. It is only drawn while a swipe is running.
+        if (count >= 2 && advance > 0f) {
+            StackLayer(
+                imageUri = imageUris[(currentImageIndex + deepestSlot + 1) % count],
+                shape = stackShape,
+                scaleX = lerp(belowScale, deepestScale, advance),
+                topOffset = interpolateDp(belowOffset, deepestOffset, advance),
+                dimAlpha = 0.5f,
+                layerAlpha = advance,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        if (count >= 3) {
+            StackLayer(
+                imageUri = imageUris[(deckBase + 2) % count],
+                shape = stackShape,
+                scaleX = lerp(0.82f, 0.91f, advance),
+                topOffset = interpolateDp(-stackPeek, -stackStep, advance),
+                dimAlpha = lerp(0.5f, 0.4f, advance),
+                layerAlpha = 1f,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        // Card stepping up to the front. At the end of the swipe it sits exactly where the
+        // front card sits, which makes the hand-over seamless.
+        if (count >= 2) {
+            StackLayer(
+                imageUri = imageUris[(deckBase + 1) % count],
+                shape = RoundedCornerShape(interpolateDp(12.dp, 28.dp, advance)),
+                scaleX = lerp(0.91f, 1f, advance),
+                topOffset = interpolateDp(-stackStep, 0.dp, advance),
+                dimAlpha = lerp(0.4f, event.backgroundBrightness, advance),
+                layerAlpha = 1f,
+                shadowElevation = interpolateDp(0.dp, 2.dp, advance),
+                // This layer becomes the front card, so its labels come back.
+                labels = cardLabels,
+                labelsAlpha = if (isSwipingUp) incomingLabelsAlpha else 0f,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        // Card revealed while swiping down (the previous picture). It sits right behind the
+        // front card, so it becomes the next front card without any visible jump.
+        if (count >= 2 && isSwipingDown) {
+            StackLayer(
+                imageUri = imageUris[(currentImageIndex - 1 + count) % count],
+                shape = cardShape,
+                scaleX = 1f,
+                topOffset = 0.dp,
+                dimAlpha = lerp(
+                    (event.backgroundBrightness + 0.25f).coerceAtMost(0.9f),
+                    event.backgroundBrightness,
+                    swipeProgress
+                ),
+                layerAlpha = 1f,
+                // The revealed card becomes the front card, so its labels come back.
+                labels = cardLabels,
+                labelsAlpha = incomingLabelsAlpha,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                // The card must never leave its own slot, otherwise it would be drawn on top
+                // of the countdown card next to it while it is swiped away.
+                .clipToBoundsWithBleed()
+                // The whole card travels with the drag, its content included.
+                .graphicsLayer { translationY = offsetY.value }
+                .onGloballyPositioned { coordinates ->
+                    cardHeightPx = coordinates.size.height.toFloat()
+                    onCardMeasured?.invoke(coordinates.size.width, coordinates.size.height)
+                }
+                .pointerInput(count) {
+                    if (count > 1) {
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                scope.launch {
+                                    val height = if (cardHeightPx > 0f) cardHeightPx else 400f
+                                    val newOffset = (offsetY.value + dragAmount).coerceIn(-height, height)
+                                    offsetY.snapTo(newOffset)
+                                }
+                            },
+                            onDragEnd = {
+                                scope.launch {
+                                    val threshold = 40.dp.toPx()
+                                    val height = if (cardHeightPx > 0f) cardHeightPx else 400f
+                                    if (offsetY.value < -threshold) {
+                                        // The card leaves the stack completely while the card
+                                        // behind reaches the front position at the same time.
+                                        // Its labels are already at full alpha, so they simply
+                                        // take over without a jump.
+                                        offsetY.animateTo(-height, spring(stiffness = Spring.StiffnessMediumLow))
+                                        currentImageIndex = (currentImageIndex + 1) % count
+                                        offsetY.snapTo(0f)
+                                    } else if (offsetY.value > threshold) {
+                                        offsetY.animateTo(height, spring(stiffness = Spring.StiffnessMediumLow))
+                                        currentImageIndex = (currentImageIndex - 1 + count) % count
+                                        offsetY.snapTo(0f)
+                                    } else {
+                                        offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                    }
+                                }
+                            },
+                            onDragCancel = {
+                                scope.launch {
+                                    offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
                                 }
                             }
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.delete)) },
-                        leadingIcon = { Icon(Icons.Default.Delete, null) },
-                        onClick = { expanded = false; onDelete() }
-                    )
-                }
-            }
-            if (event.backgroundImageUri != null) {
-                AsyncImage(model = event.backgroundImageUri, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
-                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = event.backgroundBrightness))) {}
-            }
-            Column(modifier = Modifier.padding(24.dp).fillMaxWidth()) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = event.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = titleColor, fontFamily = customFontFamily)
-                        Text(text = "${stringResource(R.string.target)}${target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))}", style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
+                        )
                     }
                 }
-                Spacer(modifier = Modifier.height(32.dp))
-                Column {
-                    if (duration.isNegative) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            val (value, unit) = when {
-                                kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
-                                kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
-                                else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { offset ->
+                            if (showActions) {
+                                pressOffset = offset
+                                expanded = true
                             }
-                            Text(text = value, fontSize = 56.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 56.sp, fontFamily = customFontFamily)
-                            Text(text = unit + stringResource(R.string.ago_suffix), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp), fontFamily = customFontFamily)
                         }
-                    } else {
-                        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
-                            Text(text = days.toString(), fontSize = 56.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 56.sp, fontFamily = customFontFamily)
-                            Text(text = stringResource(R.string.unit_days), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp), fontFamily = customFontFamily)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                                Text(text = hours.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
-                                Text(text = stringResource(R.string.unit_hours), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp, end = 8.dp), fontFamily = customFontFamily)
-                                Text(text = minutes.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
-                                Text(text = stringResource(R.string.unit_minutes), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp, end = 8.dp), fontFamily = customFontFamily)
-                                if (days == 0L && hours == 0L) {
-                                    Text(text = seconds.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = numberColor, fontFamily = customFontFamily)
-                                    Text(text = stringResource(R.string.unit_seconds), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 2.dp), fontFamily = customFontFamily)
+                    )
+                },
+            shape = cardShape,
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBgColor)
+        ) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.offset { IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) }.size(0.dp)) {
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.edit_card)) },
+                            leadingIcon = { Icon(Icons.Default.Edit, null) },
+                            onClick = { expanded = false; onEdit() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.copy)) },
+                            leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                            onClick = { expanded = false; onCopy() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.share)) },
+                            leadingIcon = { Icon(Icons.Default.Share, null) },
+                            onClick = {
+                                expanded = false
+                                scope.launch {
+                                    try {
+                                        isExporting = true
+                                        delay(100.milliseconds)
+                                        val bitmap = graphicsLayer.toImageBitmap()
+                                        saveEventAsImage(context, bitmap)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, shareErrorMsg.format(e.message), Toast.LENGTH_LONG).show()
+                                    } finally {
+                                        isExporting = false
+                                    }
                                 }
                             }
-                        }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.delete)) },
+                            leadingIcon = { Icon(Icons.Default.Delete, null) },
+                            onClick = { expanded = false; onDelete() }
+                        )
                     }
                 }
-            }
-            if (!isExporting && (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none"))) {
-                Row(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (event.reminderMinutesBefore != null) {
-                        Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                    }
-                    if (event.repeatType != null && event.repeatType != "none") {
-                        Icon(imageVector = Icons.Default.Repeat, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                    }
+
+                if (count > 0) {
+                    // Only the picture of the front card is drawn here: the pictures behind it
+                    // belong to the stack layers, which travel with the drag.
+                    AsyncImage(model = imageUris[currentImageIndex], contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+                    Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = event.backgroundBrightness))) {}
                 }
+
+                cardLabels(outgoingLabelsAlpha)
             }
         }
     }
@@ -3206,7 +3822,11 @@ fun SmallCountdownItem(
 
     val customColor = event.colorHex?.let { try { Color(it.toColorInt()) } catch(_:Exception) { null } }
     val baseColor = customColor ?: MaterialTheme.colorScheme.primary
-    val hasImage = event.widgetImageUri != null
+    // The grid ("small card") layout uses the square (1:1) crops
+    val imageUris = event.getBgSquareImageUris()
+    var currentImageIndex by remember(imageUris) { mutableIntStateOf(0) }
+    val count = imageUris.size
+    val hasImage = count > 0
     val cardBgColor = if (hasImage) Color.Black else baseColor
     val titleColor = if (hasImage) (customColor ?: Color.White) else {
         val luminance = baseColor.red * 0.299f + baseColor.green * 0.587f + baseColor.blue * 0.114f
@@ -3219,121 +3839,342 @@ fun SmallCountdownItem(
 
     val shareErrorMsg = stringResource(R.string.share_error)
 
-    Card(
+    // Reserve a strip above the card so the back layers of the stack can peek out with their
+    // own rounded tops (the card shape would otherwise cut them off). The strip also keeps the
+    // layers from overlapping the neighboring cards in the grid.
+    val stackPeek = when {
+        count >= 3 -> 20.dp
+        count == 2 -> 10.dp
+        else -> 0.dp
+    }
+    val stackStep = if (count >= 3) 10.dp else stackPeek
+    val cardShape = RoundedCornerShape(24.dp)
+    val stackShape = RoundedCornerShape(10.dp)
+
+    // Vertical drag of the front card. The whole card follows the drag, its content
+    // included, so a swipe makes the full card stacked behind step up to the front instead
+    // of only swapping the picture inside the card.
+    val offsetY = remember { Animatable(0f) }
+    var cardHeightPx by remember { mutableFloatStateOf(0f) }
+
+    // 0f = resting stack, 1f = the front card traveled a whole card height.
+    val swipeProgress = if (cardHeightPx > 0f) {
+        (offsetY.value.absoluteValue / cardHeightPx).coerceIn(0f, 1f)
+    } else 0f
+    val isSwipingUp = offsetY.value < 0f
+    val isSwipingDown = offsetY.value > 0f
+    // The stack only steps forward while swiping up, towards the next picture.
+    val advance = if (isSwipingUp) swipeProgress else 0f
+    // While swiping down the back layers are already rendered the way they will look after
+    // the swap, so the peeking pictures never pop at the end of the gesture.
+    val deckBase = if (isSwipingDown) (currentImageIndex - 1 + count) % count else currentImageIndex
+    // Deepest slot of the stack that is occupied at rest (1 with two pictures, 2 from three).
+    val deepestSlot = if (count >= 3) 2 else 1
+    val deepestScale = if (count >= 3) 0.82f else 0.91f
+    val deepestOffset = if (count >= 3) -stackPeek else -stackStep
+    val belowScale = if (count >= 3) 0.73f else 0.82f
+    val belowOffset = if (count >= 3) -(stackPeek + stackStep) else -stackPeek
+
+    // Cross-fade of the labels while a card is dragged away: the labels of the card that
+    // leaves the front position dim out while the labels of the card taking its place come
+    // back. Both alphas always add up to one, so the text never blinks on its own and the
+    // hand-over is seamless: when the index swaps, the labels behind are already at full
+    // alpha on the card that takes over.
+    val labelTravel = if (cardHeightPx > 0f) {
+        (offsetY.value.absoluteValue / (cardHeightPx * 0.5f)).coerceIn(0f, 1f)
+    } else 0f
+    // Smoothed, so the labels are gone before the card reaches the end of its travel.
+    val incomingLabelsAlpha = labelTravel * labelTravel * (3f - 2f * labelTravel)
+    val outgoingLabelsAlpha = 1f - incomingLabelsAlpha
+
+    // Everything that is printed on the card: the title, the target date, the countdown and
+    // the small badges. The front card draws them, and so does the stack layer that takes its
+    // place while a swipe is running, which is what lets the two copies cross-fade.
+    val cardLabels: @Composable BoxScope.(Float) -> Unit = { labelsAlpha ->
+        if (count > 1) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .alpha(labelsAlpha)
+                    .padding(12.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    tint = titleColor,
+                    modifier = Modifier.size(12.dp)
+                )
+                Text(
+                    text = "${currentImageIndex + 1}/$count",
+                    color = titleColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = customFontFamily
+                )
+            }
+        }
+        Column(modifier = Modifier.alpha(labelsAlpha).padding(16.dp).fillMaxSize()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = event.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = titleColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = customFontFamily)
+                    Text(text = stringResource(R.string.target), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
+                    Text(text = target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = customFontFamily)
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                    if (duration.isNegative) {
+                        val (value, unit) = when {
+                            kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
+                            kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
+                            else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
+                        }
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(text = value, fontSize = 32.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 32.sp, fontFamily = customFontFamily)
+                            Text(text = unit + stringResource(R.string.ago_suffix), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
+                        }
+                    } else {
+                        if (days > 0) {
+                            Column {
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text(text = days.toString(), fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
+                                    Text(text = stringResource(R.string.unit_days), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
+                                }
+                                // The hours and the minutes of the remaining time, so the small card
+                                // carries the same countdown as the big one. They get a line of their
+                                // own: the square card is too narrow to print the whole countdown in a
+                                // single row, so the time simply uses a smaller size than the days.
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                ) {
+                                    Text(text = hours.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, lineHeight = 16.sp, fontFamily = customFontFamily)
+                                    Text(text = stringResource(R.string.unit_hours), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 1.dp, end = 6.dp), fontFamily = customFontFamily)
+                                    Text(text = minutes.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, lineHeight = 16.sp, fontFamily = customFontFamily)
+                                    Text(text = stringResource(R.string.unit_minutes), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 1.dp), fontFamily = customFontFamily)
+                                }
+                            }
+                        } else {
+                            val timeText = when {
+                                hours > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", hours, minutes)
+                                minutes > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", minutes, seconds)
+                                else -> String.format(LocalConfiguration.current.locales[0], "%02d", seconds)
+                            }
+                            Text(text = timeText, fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
+                        }
+                    }
+                }
+                if (!isExporting && (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none"))) {
+                    Row(modifier = Modifier.align(Alignment.BottomEnd).alpha(labelsAlpha), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (event.reminderMinutesBefore != null) {
+                            Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
+                        }
+                        if (event.repeatType != null && event.repeatType != "none") {
+                            Icon(imageVector = Icons.Default.Repeat, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
+            // Mask for the whole stack (the peeking layers live in the padding, which is part
+            // of these bounds): it keeps every layer, and the card dragged out of its slot,
+            // inside this item.
+            .clipToBoundsWithBleed()
+            // The capture sits above the padding so the bitmap exported by "share"
+            // also contains the stacked layers peeking out above the card.
             .drawWithContent {
                 graphicsLayer.record {
                     this@drawWithContent.drawContent()
                 }
                 drawLayer(graphicsLayer)
             }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onLongPress = { offset ->
-                        if (showActions) {
-                            pressOffset = offset
-                            expanded = true
-                        }
-                    }
-                )
-            },
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = cardBgColor)
+            .padding(top = stackPeek)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.offset { IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) }.size(0.dp)) {
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.edit_card)) },
-                        leadingIcon = { Icon(Icons.Default.Edit, null) },
-                        onClick = { expanded = false; onEdit() }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.copy)) },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
-                        onClick = { expanded = false; onCopy() }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.share)) },
-                        leadingIcon = { Icon(Icons.Default.Share, null) },
-                        onClick = {
-                            expanded = false
-                            scope.launch {
-                                try {
-                                    isExporting = true
-                                    delay(100.milliseconds)
-                                    val bitmap = graphicsLayer.toImageBitmap()
-                                    saveEventAsImage(context, bitmap)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, shareErrorMsg.format(e.message), Toast.LENGTH_LONG).show()
-                                } finally {
-                                    isExporting = false
+        // Card fading in at the very back so the stack stays filled while the other cards
+        // move one slot towards the front. It is only drawn while a swipe is running.
+        if (count >= 2 && advance > 0f) {
+            StackLayer(
+                imageUri = imageUris[(currentImageIndex + deepestSlot + 1) % count],
+                shape = stackShape,
+                scaleX = lerp(belowScale, deepestScale, advance),
+                topOffset = interpolateDp(belowOffset, deepestOffset, advance),
+                dimAlpha = 0.5f,
+                layerAlpha = advance,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        if (count >= 3) {
+            StackLayer(
+                imageUri = imageUris[(deckBase + 2) % count],
+                shape = stackShape,
+                scaleX = lerp(0.82f, 0.91f, advance),
+                topOffset = interpolateDp(-stackPeek, -stackStep, advance),
+                dimAlpha = lerp(0.5f, 0.4f, advance),
+                layerAlpha = 1f,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        // Card stepping up to the front. At the end of the swipe it sits exactly where the
+        // front card sits, which makes the hand-over seamless.
+        if (count >= 2) {
+            StackLayer(
+                imageUri = imageUris[(deckBase + 1) % count],
+                shape = RoundedCornerShape(interpolateDp(10.dp, 24.dp, advance)),
+                scaleX = lerp(0.91f, 1f, advance),
+                topOffset = interpolateDp(-stackStep, 0.dp, advance),
+                dimAlpha = lerp(0.4f, event.backgroundBrightness, advance),
+                layerAlpha = 1f,
+                shadowElevation = interpolateDp(0.dp, 2.dp, advance),
+                // This layer becomes the front card, so its labels come back.
+                labels = cardLabels,
+                labelsAlpha = if (isSwipingUp) incomingLabelsAlpha else 0f,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        // Card revealed while swiping down (the previous picture). It sits right behind the
+        // front card, so it becomes the next front card without any visible jump.
+        if (count >= 2 && isSwipingDown) {
+            StackLayer(
+                imageUri = imageUris[(currentImageIndex - 1 + count) % count],
+                shape = cardShape,
+                scaleX = 1f,
+                topOffset = 0.dp,
+                dimAlpha = lerp(
+                    (event.backgroundBrightness + 0.25f).coerceAtMost(0.9f),
+                    event.backgroundBrightness,
+                    swipeProgress
+                ),
+                layerAlpha = 1f,
+                // The revealed card becomes the front card, so its labels come back.
+                labels = cardLabels,
+                labelsAlpha = incomingLabelsAlpha,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                // The card must never leave its own slot, otherwise it would be drawn on top
+                // of the countdown card next to it while it is swiped away.
+                .clipToBoundsWithBleed()
+                // The whole card travels with the drag, its content included.
+                .graphicsLayer { translationY = offsetY.value }
+                .onGloballyPositioned { coordinates ->
+                    cardHeightPx = coordinates.size.height.toFloat()
+                }
+                .pointerInput(count) {
+                    if (count > 1) {
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                scope.launch {
+                                    val height = if (cardHeightPx > 0f) cardHeightPx else 400f
+                                    val newOffset = (offsetY.value + dragAmount).coerceIn(-height, height)
+                                    offsetY.snapTo(newOffset)
                                 }
+                            },
+                            onDragEnd = {
+                                scope.launch {
+                                    val threshold = 40.dp.toPx()
+                                    val height = if (cardHeightPx > 0f) cardHeightPx else 400f
+                                    if (offsetY.value < -threshold) {
+                                        // The card leaves the stack completely while the card
+                                        // behind reaches the front position at the same time.
+                                        // Its labels are already at full alpha, so they simply
+                                        // take over without a jump.
+                                        offsetY.animateTo(-height, spring(stiffness = Spring.StiffnessMediumLow))
+                                        currentImageIndex = (currentImageIndex + 1) % count
+                                        offsetY.snapTo(0f)
+                                    } else if (offsetY.value > threshold) {
+                                        offsetY.animateTo(height, spring(stiffness = Spring.StiffnessMediumLow))
+                                        currentImageIndex = (currentImageIndex - 1 + count) % count
+                                        offsetY.snapTo(0f)
+                                    } else {
+                                        offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                    }
+                                }
+                            },
+                            onDragCancel = {
+                                scope.launch {
+                                    offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                }
+                            }
+                        )
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { offset ->
+                            if (showActions) {
+                                pressOffset = offset
+                                expanded = true
                             }
                         }
                     )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.delete)) },
-                        leadingIcon = { Icon(Icons.Default.Delete, null) },
-                        onClick = { expanded = false; onDelete() }
-                    )
-                }
-            }
-            if (event.widgetImageUri != null) {
-                AsyncImage(model = event.widgetImageUri, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
-                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = event.backgroundBrightness))) {}
-            }
-            Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = event.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = titleColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = customFontFamily)
-                        Text(text = stringResource(R.string.target), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
-                        Text(text = target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = customFontFamily)
-                    }
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.align(Alignment.BottomStart)) {
-                        if (duration.isNegative) {
-                            val (value, unit) = when {
-                                kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
-                                kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
-                                else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
-                            }
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Text(text = value, fontSize = 32.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 32.sp, fontFamily = customFontFamily)
-                                Text(text = unit + stringResource(R.string.ago_suffix), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
-                            }
-                        } else {
-                            if (days > 0) {
-                                Row(verticalAlignment = Alignment.Bottom) {
-                                    Text(text = days.toString(), fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
-                                    Text(text = stringResource(R.string.unit_days), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
+                },
+            shape = cardShape,
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBgColor)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.offset { IntOffset(pressOffset.x.toInt(), pressOffset.y.toInt()) }.size(0.dp)) {
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.edit_card)) },
+                            leadingIcon = { Icon(Icons.Default.Edit, null) },
+                            onClick = { expanded = false; onEdit() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.copy)) },
+                            leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                            onClick = { expanded = false; onCopy() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.share)) },
+                            leadingIcon = { Icon(Icons.Default.Share, null) },
+                            onClick = {
+                                expanded = false
+                                scope.launch {
+                                    try {
+                                        isExporting = true
+                                        delay(100.milliseconds)
+                                        val bitmap = graphicsLayer.toImageBitmap()
+                                        saveEventAsImage(context, bitmap)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, shareErrorMsg.format(e.message), Toast.LENGTH_LONG).show()
+                                    } finally {
+                                        isExporting = false
+                                    }
                                 }
-                            } else {
-                                val timeText = when {
-                                    hours > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", hours, minutes)
-                                    minutes > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", minutes, seconds)
-                                    else -> String.format(LocalConfiguration.current.locales[0], "%02d", seconds)
-                                }
-                                Text(text = timeText, fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
                             }
-                        }
-                    }
-                    if (!isExporting && (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none"))) {
-                        Row(modifier = Modifier.align(Alignment.BottomEnd), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (event.reminderMinutesBefore != null) {
-                                Icon(imageVector = Icons.Default.Notifications, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
-                            }
-                            if (event.repeatType != null && event.repeatType != "none") {
-                                Icon(imageVector = Icons.Default.Repeat, contentDescription = null, tint = titleColor.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
-                            }
-                        }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.delete)) },
+                            leadingIcon = { Icon(Icons.Default.Delete, null) },
+                            onClick = { expanded = false; onDelete() }
+                        )
                     }
                 }
+
+                if (count > 0) {
+                    // Only the picture of the front card is drawn here: the pictures behind it
+                    // belong to the stack layers, which travel with the drag.
+                    AsyncImage(model = imageUris[currentImageIndex], contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+                    Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = event.backgroundBrightness))) {}
+                }
+
+                cardLabels(outgoingLabelsAlpha)
             }
         }
     }
@@ -3346,7 +4187,10 @@ fun ImageCropOverlay(
     onCropDone: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
     onReselect: () -> Unit,
-    showRatioToggle: Boolean = true
+    showRatioToggle: Boolean = true,
+    singleStepOnly: Boolean = false,
+    // Optional "2/10" style hint telling which photo of the batch is being cropped
+    stepLabel: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -3362,13 +4206,15 @@ fun ImageCropOverlay(
         }
     }
 
-    var rotation by remember { mutableFloatStateOf(0f) }
-    var isMirrored by remember { mutableStateOf(false) }
-    var cropRatio by remember { mutableFloatStateOf(initialRatio) } 
-    var isSecondStep by remember { mutableStateOf(false) }
+    // Reset the editing transform whenever a different image is loaded
+    // (important for the multi-image flow, where the same overlay is reused per image)
+    var rotation by remember(originalUri) { mutableFloatStateOf(0f) }
+    var isMirrored by remember(originalUri) { mutableStateOf(false) }
+    var cropRatio by remember(originalUri) { mutableFloatStateOf(initialRatio) }
+    var isSecondStep by remember(originalUri) { mutableStateOf(false) }
     
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    var scale by remember(originalUri) { mutableFloatStateOf(1f) }
+    var offset by remember(originalUri) { mutableStateOf(Offset.Zero) }
     var containerWidthState by remember { mutableFloatStateOf(0f) }
     var containerHeightState by remember { mutableFloatStateOf(0f) }
 
@@ -3502,19 +4348,32 @@ fun ImageCropOverlay(
         ) {
             Box(
                 modifier = Modifier
+                    .weight(1f, fill = false)
                     .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
                     .padding(horizontal = 24.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val stepText = if (showRatioToggle) {
-                    if (isSecondStep) " (2/2)" else " (1/2)"
-                } else ""
-                Text(
-                    text = stringResource(R.string.crop_title) + stepText,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    fontSize = 20.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.crop_title),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 20.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (stepLabel != null) {
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = stepLabel,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.65f),
+                            fontSize = 16.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
             IconButton(
                 onClick = onDismiss,
@@ -3595,7 +4454,8 @@ fun ImageCropOverlay(
                             .height(38.dp)
                             .padding(3.dp)
                     ) {
-                        val isLeftSelected = cropRatio == initialRatio
+                        // Left icon = the tall card ratio, right icon = the square widget ratio
+                        val isLeftSelected = !isSecondStep
                         val alignment = if (isLeftSelected) Alignment.CenterStart else Alignment.CenterEnd
                         Box(
                             modifier = Modifier
@@ -3669,11 +4529,13 @@ fun ImageCropOverlay(
                                 matrix.postTranslate(-left, -top)
                                 matrix.postScale(outScale, outScale)
                                 android.graphics.Canvas(croppedBitmap).drawBitmap(bitmapVal, matrix, android.graphics.Paint().apply { isFilterBitmap = true; isAntiAlias = true })
-                                val cacheFile = File(context.cacheDir, "cropped_${System.currentTimeMillis()}.jpg")
-                                FileOutputStream(cacheFile).use { croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
-                                val uriStr = Uri.fromFile(cacheFile).toString()
+                                // Keep cropped images in filesDir (instead of cacheDir) so they
+                                // survive the system / the user clearing the app cache.
+                                val croppedFile = File(eventImagesDir(context), "cropped_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg")
+                                FileOutputStream(croppedFile).use { croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+                                val uriStr = Uri.fromFile(croppedFile).toString()
                                 withContext(Dispatchers.Main) {
-                                    if (showRatioToggle && !isSecondStep) {
+                                    if (showRatioToggle && !singleStepOnly && !isSecondStep) {
                                         onCropDone(uriStr, false)
                                         isSecondStep = true
                                         cropRatio = 1f; scale = 1f; offset = Offset.Zero
@@ -3721,8 +4583,11 @@ private fun checkUpdate(context: Context, scope: CoroutineScope, silent: Boolean
                 }
             }
             
-            val url = URL("https://raw.githubusercontent.com/ERSAN-exe/CountDayDown/master/app/build.gradle.kts")
-            val content = url.readText()
+            val connection = (URL("https://raw.githubusercontent.com/ERSAN-exe/CountDayDown/master/app/build.gradle.kts").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 10000
+            }
+            val content = connection.inputStream.bufferedReader().use { it.readText() }
             
             val versionCodeRegex = Regex("""versionCode\s*=\s*(\d+)""")
             val versionNameRegex = Regex("""versionName\s*=\s*"([^"]+)"""")
@@ -3740,18 +4605,243 @@ private fun checkUpdate(context: Context, scope: CoroutineScope, silent: Boolean
                     if (remoteVersionCode != -1) {
                         Toast.makeText(context, context.getString(R.string.already_latest, currentVersionCode, remoteVersionCode), Toast.LENGTH_LONG).show()
                     } else {
-                        Toast.makeText(context, context.getString(R.string.update_error), Toast.LENGTH_SHORT).show()
+                        val errorMsg = "${context.getString(R.string.update_error)}: Failed to parse remote version"
+                        Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
                     }
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
             if (!silent) {
+                val errorDetail = e.localizedMessage ?: e.message ?: e.javaClass.simpleName
+                val errorMsg = "${context.getString(R.string.update_error)}\n($errorDetail)"
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, context.getString(R.string.update_error), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
                 }
             }
         }
+    }
+}
+
+private const val EVENT_IMAGES_DIR_NAME = "event_images"
+private const val IMPORTED_IMAGES_DIR_NAME = "imported_images"
+
+/** Name prefixes of every image file this app creates, used to recognize its own files. */
+private val IMAGE_FILE_PREFIXES = listOf("bg_", "sq_", "widget_", "cropped_", "moved_")
+
+/**
+ * Directory holding every image that was cropped / copied for a countdown card.
+ * It lives in filesDir so the images survive cache eviction and "clear cache".
+ */
+private fun eventImagesDir(context: Context): File =
+    File(context.filesDir, EVENT_IMAGES_DIR_NAME).apply { mkdirs() }
+
+/** Returns the local file behind a `file://` uri string, or null for any other uri. */
+private fun localImageFileOf(uriStr: String?): File? {
+    if (uriStr.isNullOrBlank()) return null
+    return try {
+        val uri = uriStr.toUri()
+        if (uri.scheme == "file") uri.path?.let { File(it) } else null
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/** Deletes every local image file that belongs to [event]. */
+private fun deleteEventImageFiles(event: CountdownEvent) {
+    try {
+        event.getBgImageUris().forEach { uriStr -> localImageFileOf(uriStr)?.delete() }
+        event.backgroundSquareImageUris?.forEach { uriStr -> localImageFileOf(uriStr)?.delete() }
+        localImageFileOf(event.widgetImageUri)?.delete()
+    } catch (_: Exception) {}
+}
+
+/** Same date format the cards print, reused as searchable text by the home screen search. */
+private val searchDateFormatter: DateTimeFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+
+/**
+ * Distance from now to the target of [event], as used by the home screen sorting.
+ * Mirrors what the cards print (excluded days included), so the list order matches the
+ * countdown / count-up state that is on screen.
+ */
+private fun countdownDistance(event: CountdownEvent, now: LocalDateTime): Duration {
+    val target = event.calculateTarget(now)
+    var duration = Duration.between(now, target)
+    if (!event.excludedDays.isNullOrEmpty()) {
+        val excludedCount = event.countExcludedDaysBetween(now, target)
+        duration = if (duration.isNegative) duration.plus(Duration.ofDays(excludedCount)) else duration.minus(Duration.ofDays(excludedCount))
+    }
+    return duration
+}
+
+/**
+ * Home screen ordering.
+ *
+ * Sorting by creation date simply follows [CountdownEvent.createdAt]. Sorting by the distance to
+ * now keeps the cards that still count down on top and the count-up cards below them; inside each
+ * of those two groups the nearest card comes first, or the farthest one when [sortAscending] is
+ * false. The order of the two groups themselves never flips.
+ */
+private fun orderHomeEvents(
+    events: List<CountdownEvent>,
+    sortAscending: Boolean,
+    sortByCreationDate: Boolean,
+    now: LocalDateTime
+): List<CountdownEvent> {
+    if (sortByCreationDate) {
+        val byCreation = events.sortedBy { it.createdAt }
+        return if (sortAscending) byCreation else byCreation.reversed()
+    }
+
+    val direction = if (sortAscending) 1 else -1
+    return events.sortedWith { a: CountdownEvent, b: CountdownEvent ->
+        val distanceA = countdownDistance(a, now)
+        val distanceB = countdownDistance(b, now)
+        val groupA = if (distanceA.isNegative) 1 else 0
+        val groupB = if (distanceB.isNegative) 1 else 0
+        if (groupA != groupB) {
+            groupA - groupB
+        } else {
+            direction * distanceA.abs().toMillis().compareTo(distanceB.abs().toMillis())
+        }
+    }
+}
+
+/**
+ * Fuzzy search behind the home screen search field.
+ *
+ * The query is split on whitespace, and every token has to match somewhere in [texts] (the card
+ * title and its target date), either as a contiguous run or as single characters appearing in
+ * order. So "sb" still finds "Some Birthday" and "2027" finds a card targeting 2027.
+ * Returns a relevance score (higher is better), or null when nothing matches.
+ */
+private fun fuzzySearchScore(query: String, vararg texts: String): Int? {
+    val tokens = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    if (tokens.isEmpty()) return 0
+    val haystack = texts.joinToString(separator = " ").lowercase()
+    var total = 0
+    for (token in tokens) {
+        total += fuzzyTokenScore(token, haystack) ?: return null
+    }
+    return total
+}
+
+/** Scores one query token against the haystack; contiguous hits beat scattered ones. */
+private fun fuzzyTokenScore(token: String, haystack: String): Int? {
+    val direct = haystack.indexOf(token)
+    if (direct >= 0) {
+        // Contiguous hit: reward matches that start early, prefixes most of all.
+        return 1000 - direct.coerceAtMost(999) + if (direct == 0) 500 else 0
+    }
+
+    var cursor = 0
+    var score = 0
+    var streak = 0
+    for (char in token) {
+        val found = haystack.indexOf(char, cursor)
+        if (found < 0) return null
+        if (found == cursor) {
+            streak += 1
+            score += 20 + streak * 5
+        } else {
+            streak = 0
+            // Small penalty for the gap, but never enough to turn a match into a miss.
+            score += (8 - (found - cursor)).coerceAtLeast(1)
+        }
+        cursor = found + 1
+    }
+    return score
+}
+
+/**
+ * Copies images that older versions wrote into cacheDir over to filesDir, so already saved
+ * cards stop being at the mercy of the system / the user clearing the app cache.
+ * Only copies, never deletes, and only touches paths that really live in cacheDir,
+ * so running it more than once is harmless.
+ */
+private suspend fun migrateCachedImages(context: Context, dataManager: DataManager) {
+    withContext(Dispatchers.IO) {
+        try {
+            val cachePath = context.cacheDir.absolutePath
+            var changed = false
+
+            fun moveOutOfCache(uriStr: String?): String? {
+                val file = localImageFileOf(uriStr) ?: return uriStr
+                if (!file.isFile || !file.absolutePath.startsWith(cachePath)) return uriStr
+                return try {
+                    val target = File(eventImagesDir(context), "moved_${UUID.randomUUID()}.jpg")
+                    file.copyTo(target, overwrite = true)
+                    changed = true
+                    Uri.fromFile(target).toString()
+                } catch (_: Exception) {
+                    uriStr
+                }
+            }
+
+            val events = dataManager.events.first()
+            val migrated = events.map { event ->
+                val oldBgUris = event.getBgImageUris()
+                val newBgUris = oldBgUris.map { uriStr -> moveOutOfCache(uriStr) ?: uriStr }
+                val oldSquareUris = event.backgroundSquareImageUris
+                val newSquareUris = oldSquareUris?.map { uriStr -> moveOutOfCache(uriStr) ?: uriStr }
+                val newWidgetUri = moveOutOfCache(event.widgetImageUri)
+                if (newBgUris == oldBgUris && newSquareUris == oldSquareUris && newWidgetUri == event.widgetImageUri) event
+                else event.copy(
+                    backgroundImageUri = newBgUris.firstOrNull() ?: event.backgroundImageUri,
+                    backgroundImageUris = if (newBgUris.size > 1) newBgUris else event.backgroundImageUris,
+                    backgroundSquareImageUris = newSquareUris,
+                    widgetImageUri = newWidgetUri
+                )
+            }
+            val newAppBg = moveOutOfCache(dataManager.appBackgroundImage.first())
+
+            if (changed) {
+                dataManager.saveEvents(migrated)
+                dataManager.setAppBackgroundImage(newAppBg)
+            }
+        } catch (_: Exception) {}
+    }
+}
+
+/**
+ * Reclaims images that are no longer referenced by any card (or by the app background).
+ * Runs once per app start, where no edit screen can be holding unsaved crops, so it is
+ * safe to treat every unreferenced file as garbage.
+ */
+private suspend fun pruneOrphanImages(context: Context, dataManager: DataManager) {
+    withContext(Dispatchers.IO) {
+        try {
+            val dirs = listOf(
+                File(context.filesDir, EVENT_IMAGES_DIR_NAME),
+                File(context.filesDir, IMPORTED_IMAGES_DIR_NAME)
+            ).filter { it.isDirectory }
+            if (dirs.isEmpty()) return@withContext
+
+            val referenced = mutableSetOf<String>()
+            dataManager.events.first().forEach { event ->
+                event.getBgImageUris().forEach { uriStr ->
+                    localImageFileOf(uriStr)?.let { referenced += it.absolutePath }
+                }
+                event.backgroundSquareImageUris?.forEach { uriStr ->
+                    localImageFileOf(uriStr)?.let { referenced += it.absolutePath }
+                }
+                localImageFileOf(event.widgetImageUri)?.let { referenced += it.absolutePath }
+            }
+            localImageFileOf(dataManager.appBackgroundImage.first())?.let { referenced += it.absolutePath }
+
+            val candidates = mutableListOf<File>()
+            dirs.forEach { dir -> dir.listFiles()?.forEach { if (it.isFile) candidates += it } }
+            // Copies that older versions wrote straight into the filesDir root
+            context.filesDir.listFiles()?.forEach { file ->
+                if (file.isFile && IMAGE_FILE_PREFIXES.any { file.name.startsWith(it) }) {
+                    candidates += file
+                }
+            }
+
+            candidates.forEach { file ->
+                if (file.absolutePath !in referenced) file.delete()
+            }
+        } catch (_: Exception) {}
     }
 }
 
@@ -3804,18 +4894,3 @@ private suspend fun saveEventAsImage(context: Context, cardBitmap: ImageBitmap) 
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

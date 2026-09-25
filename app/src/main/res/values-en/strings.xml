@@ -74,7 +74,7 @@
     <string name="rgb_edit">RGB Edit</string>
     <string name="hex_edit">HEX Edit</string>
     <string name="past">Past</string>
-    <string name="version_text">Version v1.5</string>
+    <string name="version_text">Version v1.6</string>
     <string name="saved_fonts">Added Fonts</string>
     <string name="create_card">Create New Card</string>
     <string name="edit_card">Edit</string>
@@ -158,4 +158,11 @@
     <string name="cannot_exclude_all">Cannot select all days</string>
     <string name="exclude_restriction">Cannot be used with repeating or count-up features</string>
     <string name="select_image">Select Image</string>
+    <string name="camera">Camera</string>
+    <string name="max_selection_reached">You can select up to %1$d images</string>
+    <string name="search">Search</string>
+    <string name="search_hint">Search countdowns</string>
+    <string name="search_clear">Clear search</string>
+    <string name="search_no_results">No matching countdowns</string>
+    <string name="image_count">%1$d images</string>
 </resources>

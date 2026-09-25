@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.LocalDateTime
 
@@ -29,12 +28,35 @@ data class CountdownEvent(
     val repeatInterval: Int? = null,
     val repeatUnit: String? = null, // days, weeks, months, years
     val backgroundImageUri: String? = null,
+    val backgroundImageUris: List<String>? = null,
+    val backgroundSquareImageUris: List<String>? = null, // 1:1 crops used by the grid ("small card") layout
     val widgetImageUri: String? = null,
     val backgroundBrightness: Float = 0.5f, // 0.0 to 1.0, 1.0 means no mask, 0.0 means black
     val createdAt: Long = System.currentTimeMillis(),
     val customFontPath: String? = null,
     val excludedDays: List<Int>? = null // 1: Monday, ..., 7: Sunday
 ) {
+    fun getBgImageUris(): List<String> {
+        if (!backgroundImageUris.isNullOrEmpty()) {
+            return backgroundImageUris
+        }
+        if (!backgroundImageUri.isNullOrEmpty()) {
+            return listOf(backgroundImageUri)
+        }
+        return emptyList()
+    }
+
+    /**
+     * Square (1:1) crops shown by the grid / "small card" layout.
+     * Falls back to the card crops for events saved before square crops existed.
+     */
+    fun getBgSquareImageUris(): List<String> {
+        if (!backgroundSquareImageUris.isNullOrEmpty()) {
+            return backgroundSquareImageUris
+        }
+        return getBgImageUris()
+    }
+
     fun calculateTarget(now: LocalDateTime): LocalDateTime {
         var target = LocalDateTime.parse(targetDateTime)
 

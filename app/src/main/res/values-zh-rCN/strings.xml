@@ -73,7 +73,7 @@
     <string name="rgb_edit">RGB 调色</string>
     <string name="hex_edit">HEX 调色</string>
     <string name="past">已过去</string>
-    <string name="version_text">版本v1.5</string>
+    <string name="version_text">版本v1.6</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>
@@ -157,4 +157,11 @@
     <string name="cannot_exclude_all">不能选择所有日期</string>
     <string name="exclude_restriction">不能与循环/正数日功能一起使用</string>
     <string name="select_image">选择图片</string>
+    <string name="camera">相机</string>
+    <string name="max_selection_reached">最多只能选择 %1$d 张图片</string>
+    <string name="search">搜索</string>
+    <string name="search_hint">搜索倒计时</string>
+    <string name="search_clear">清除搜索内容</string>
+    <string name="search_no_results">没有找到匹配的倒计时</string>
+    <string name="image_count">%1$d 张图片</string>
 </resources>

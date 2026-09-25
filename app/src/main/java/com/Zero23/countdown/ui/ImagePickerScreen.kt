@@ -2,12 +2,17 @@ package com.Zero23.countdown.ui
 
 import android.content.ContentUris
 import android.Manifest
+import android.content.ClipData
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -15,16 +20,21 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -33,15 +43,55 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.Zero23.countdown.R
 import com.Zero23.countdown.data.DataManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+
+/** Upper bound for the stacked (multi image) selection. */
+private const val MaxSelectableImages = 9
 
 @Composable
-fun ImagePickerScreen(navController: NavController, dataManager: DataManager, onImageSelected: (Uri) -> Unit) {
+fun StackedCardsIcon(
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        
+        drawRoundRect(
+            color = tint.copy(alpha = 0.5f),
+            topLeft = Offset(width * 0.2f, 0f),
+            size = Size(width * 0.6f, height * 0.25f),
+            cornerRadius = CornerRadius(width * 0.08f)
+        )
+        drawRoundRect(
+            color = tint.copy(alpha = 0.75f),
+            topLeft = Offset(width * 0.1f, height * 0.15f),
+            size = Size(width * 0.8f, height * 0.25f),
+            cornerRadius = CornerRadius(width * 0.08f)
+        )
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(0f, height * 0.3f),
+            size = Size(width, height * 0.7f),
+            cornerRadius = CornerRadius(width * 0.12f)
+        )
+    }
+}
+
+@Composable
+fun ImagePickerScreen(
+    navController: NavController,
+    dataManager: DataManager,
+    initialAllowMulti: Boolean = false,
+    onImagesSelected: (List<Uri>) -> Unit
+) {
     val context = LocalContext.current
     val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_IMAGES
@@ -50,7 +100,8 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
     }
 
     var images by remember { mutableStateOf<List<Uri>>(emptyList()) }
-    var selectedImage by remember { mutableStateOf<Uri?>(null) }
+    var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var isMultiSelectEnabled by remember { mutableStateOf(false) }
     
     val themeMode by dataManager.themeMode.collectAsState(initial = 0)
     val isDark = when (themeMode) {
@@ -72,14 +123,88 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
         hasPermission = isGranted
     }
 
-    val filePickerLauncher = rememberLauncherForActivityResult(
+    val filePickerSingle = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
             if (uri != null) {
-                onImageSelected(uri)
+                onImagesSelected(listOf(uri))
             }
         }
     )
+
+    // Hoisted here so the launcher callback (which is not a composable scope) never has to
+    // read resources off LocalContext.current.
+    val maxSelectionMsg = stringResource(R.string.max_selection_reached, MaxSelectableImages)
+
+    val filePickerOpenMultiple = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+        onResult = { uris ->
+            if (uris.isNotEmpty()) {
+                if (uris.size > MaxSelectableImages) {
+                    Toast.makeText(
+                        context,
+                        maxSelectionMsg,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                onImagesSelected(uris.take(MaxSelectableImages))
+            }
+        }
+    )
+
+    var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // The camera always captures a single image, so the photo is returned straight away.
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+        onResult = { success ->
+            if (success && cameraImageUri != null) {
+                onImagesSelected(listOf(cameraImageUri!!))
+            }
+        }
+    )
+
+    val launchCamera = {
+        try {
+            val photoFile = File(
+                context.cacheDir,
+                "camera_photo_${System.currentTimeMillis()}.jpg"
+            )
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                photoFile
+            )
+            cameraImageUri = uri
+
+            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                putExtra(MediaStore.EXTRA_OUTPUT, uri)
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = ClipData.newRawUri("", uri)
+            }
+
+            val resInfoList = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (resolveInfo in resInfoList) {
+                val packageName = resolveInfo.activityInfo.packageName
+                context.grantUriPermission(
+                    packageName,
+                    uri,
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+
+            takePictureLauncher.launch(uri)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, "Cannot launch camera: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        launchCamera()
+    }
 
     LaunchedEffect(hasPermission) {
         if (!hasPermission) {
@@ -149,8 +274,8 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     contentPadding = PaddingValues(
-                        top = 100.dp, // Space for floating top bar
-                        bottom = 120.dp, // Space for floating bottom bar
+                        top = 100.dp,
+                        bottom = 120.dp,
                         start = 16.dp,
                         end = 16.dp
                     ),
@@ -159,13 +284,27 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(images) { uri ->
-                        val isSelected = selectedImage == uri
+                        val selectedIndex = selectedImages.indexOf(uri)
+                        val isSelected = selectedIndex != -1
                         Box(
                             modifier = Modifier
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (isSelected) selectionColor else Color.Transparent)
-                                .clickable { selectedImage = uri }
+                                .clickable {
+                                    if (initialAllowMulti && isMultiSelectEnabled) {
+                                        selectedImages = when {
+                                            isSelected -> selectedImages - uri
+                                            selectedImages.size >= MaxSelectableImages -> {
+                                                Toast.makeText(context, maxSelectionMsg, Toast.LENGTH_SHORT).show()
+                                                selectedImages
+                                            }
+                                            else -> selectedImages + uri
+                                        }
+                                    } else {
+                                        onImagesSelected(listOf(uri))
+                                    }
+                                }
                                 .padding(if (isSelected) 4.dp else 0.dp)
                                 .clip(RoundedCornerShape(8.dp))
                         ) {
@@ -175,6 +314,23 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
+                            if (initialAllowMulti && isMultiSelectEnabled && isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(6.dp)
+                                        .size(24.dp)
+                                        .background(selectionColor, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${selectedIndex + 1}",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -231,35 +387,130 @@ fun ImagePickerScreen(navController: NavController, dataManager: DataManager, on
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Left Capsule Bar containing File Manager, Camera, and (if initialAllowMulti) Stacked Cards Toggle
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(boxColor)
-                        .clickable { filePickerLauncher.launch(arrayOf("image/*")) },
-                    contentAlignment = Alignment.Center
+                        // Animates the capsule so it can stretch to the right when the counter shows up.
+                        .animateContentSize()
+                        .background(boxColor, RoundedCornerShape(24.dp))
+                        .padding(4.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
-                        contentDescription = "File Manager",
-                        tint = contentColor,
-                        modifier = Modifier.size(32.dp)
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // File Manager Button
+                        Box(
+                            modifier = Modifier
+                                .size(width = 56.dp, height = 48.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable {
+                                    if (initialAllowMulti && isMultiSelectEnabled) {
+                                        filePickerOpenMultiple.launch(arrayOf("image/*"))
+                                    } else {
+                                        filePickerSingle.launch(arrayOf("image/*"))
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                                contentDescription = "File Manager",
+                                tint = contentColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        // Camera Button (always a single image, so it turns the stack mode off)
+                        Box(
+                            modifier = Modifier
+                                .size(width = 56.dp, height = 48.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable {
+                                    if (initialAllowMulti && isMultiSelectEnabled) {
+                                        isMultiSelectEnabled = false
+                                        selectedImages = emptyList()
+                                    }
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                        launchCamera()
+                                    } else {
+                                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoCamera,
+                                contentDescription = stringResource(R.string.camera),
+                                tint = contentColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        // Stacked Cards Multi-select Toggle (Only when initialAllowMulti is true)
+                        if (initialAllowMulti) {
+                            // White pill, matching the navigation pill of the add/edit screen. While the
+                            // stack mode is on it stretches to the right to host the selected counter.
+                            val pillColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White
+                            val pillContentColor = if (isDark) Color.White else MaterialTheme.colorScheme.primary
+                            Box(
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .widthIn(min = 56.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (isMultiSelectEnabled) pillColor else Color.Transparent)
+                                    .clickable {
+                                        isMultiSelectEnabled = !isMultiSelectEnabled
+                                        if (!isMultiSelectEnabled) {
+                                            selectedImages = emptyList()
+                                        }
+                                    }
+                                    .padding(horizontal = if (isMultiSelectEnabled) 12.dp else 0.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    StackedCardsIcon(
+                                        tint = if (isMultiSelectEnabled) pillContentColor else contentColor,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    if (isMultiSelectEnabled) {
+                                        Text(
+                                            text = "${selectedImages.size}/$MaxSelectableImages",
+                                            color = pillContentColor,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
-                // Confirm Button
+                // Confirm Button: while the stack mode is off a thumbnail tap returns the single
+                // image right away, so the button has nothing to do and stays greyed out.
+                val isConfirmEnabled = initialAllowMulti && isMultiSelectEnabled && selectedImages.isNotEmpty()
                 Box(
                     modifier = Modifier
                         .size(64.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (selectedImage != null) boxColor else boxColor.copy(alpha = 0.5f))
-                        .clickable(enabled = selectedImage != null) { selectedImage?.let { onImageSelected(it) } },
+                        .background(if (isConfirmEnabled) boxColor else boxColor.copy(alpha = 0.5f))
+                        .clickable(enabled = isConfirmEnabled) {
+                            if (initialAllowMulti && isMultiSelectEnabled) {
+                                if (selectedImages.isNotEmpty()) {
+                                    onImagesSelected(selectedImages)
+                                }
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = stringResource(R.string.confirm),
-                        tint = if (selectedImage != null) contentColor else contentColor.copy(alpha = 0.5f),
+                        tint = if (isConfirmEnabled) contentColor else contentColor.copy(alpha = 0.5f),
                         modifier = Modifier.size(32.dp)
                     )
                 }

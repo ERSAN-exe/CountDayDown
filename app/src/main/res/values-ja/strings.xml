@@ -74,7 +74,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.5</string>
+    <string name="version_text">バージョン v1.6</string>
     <string name="saved_fonts">追加されたフォント</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
@@ -158,4 +158,11 @@
     <string name="cannot_exclude_all">すべての日は選択できません</string>
     <string name="exclude_restriction">繰り返し設定や過去の日付とは併用できません</string>
     <string name="select_image">画像を選択</string>
+    <string name="camera">カメラ</string>
+    <string name="max_selection_reached">選択できる画像は最大 %1$d 枚です</string>
+    <string name="search">検索</string>
+    <string name="search_hint">カウントダウンを検索</string>
+    <string name="search_clear">検索をクリア</string>
+    <string name="search_no_results">一致するカウントダウンがありません</string>
+    <string name="image_count">%1$d 枚の画像</string>
 </resources>

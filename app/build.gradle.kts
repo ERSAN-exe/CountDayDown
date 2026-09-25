@@ -12,8 +12,8 @@ android {
         applicationId = "com.Zero23.countdown"
         minSdk = 31
         targetSdk = 37
-        versionCode = 12
-        versionName = "1.5"
+        versionCode = 13
+        versionName = "1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -46,7 +46,12 @@ android {
 }
 
 dependencies {
-    implementation(platform(libs.androidx.compose.bom))
+    // Compose BOM: declared once and applied to both the app and the instrumented test
+    // classpaths. The androidTest runtime classpath does not inherit the platform constraints
+    // from `implementation`, so without this the compose test artifacts resolve versionless.
+    val composeBom = platform(libs.androidx.compose.bom)
+
+    implementation(composeBom)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
@@ -72,6 +77,7 @@ dependencies {
     implementation(libs.androidx.palette.ktx)
 
     testImplementation(libs.junit)
+    androidTestImplementation(composeBom)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

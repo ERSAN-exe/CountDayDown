@@ -74,7 +74,7 @@
     <string name="rgb_edit">RGB 調色</string>
     <string name="hex_edit">HEX 調色</string>
     <string name="past">已過去</string>
-    <string name="version_text">版本 v1.5</string>
+    <string name="version_text">版本 v1.6</string>
     <string name="saved_fonts">已添加的字體</string>
     <string name="create_card">創建新倒計時卡片</string>
     <string name="edit_card">編輯</string>
@@ -158,4 +158,11 @@
     <string name="cannot_exclude_all">不能選擇所有日期</string>
     <string name="exclude_restriction">不能與循環/正數日功能一起使用</string>
     <string name="select_image">選擇圖片</string>
+    <string name="camera">相機</string>
+    <string name="max_selection_reached">最多只能選擇 %1$d 張圖片</string>
+    <string name="search">搜尋</string>
+    <string name="search_hint">搜尋倒數</string>
+    <string name="search_clear">清除搜尋內容</string>
+    <string name="search_no_results">沒有找到符合的倒數</string>
+    <string name="image_count">%1$d 張圖片</string>
 </resources>
