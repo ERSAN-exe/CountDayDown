@@ -4555,10 +4555,61 @@ fun ImageCropOverlay(
     }
 }
 
+/**
+ * Raw content of `app/build.gradle.kts` in the repository, i.e. the raw counterpart of
+ * https://github.com/ERSAN-exe/CountDayDown/blob/master/app/build.gradle.kts
+ */
+private const val REMOTE_BUILD_GRADLE_URL =
+    "https://raw.githubusercontent.com/ERSAN-exe/CountDayDown/master/app/build.gradle.kts"
+
+/** APK published on the GitHub releases page, used by the update dialog. */
+private const val RELEASE_APK_URL =
+    "https://github.com/ERSAN-exe/CountDayDown/releases/latest/download/app-release.apk"
+
+/**
+ * 1-based line of `versionCode` inside the `defaultConfig` block of `app/build.gradle.kts`.
+ * The update check reads this line first so the compared value is always the release version
+ * declared by the repository.
+ */
+private const val REMOTE_VERSION_CODE_LINE = 15
+
+/** 1-based line of `versionName`, directly below [REMOTE_VERSION_CODE_LINE]. */
+private const val REMOTE_VERSION_NAME_LINE = 16
+
+private val versionCodeRegex = Regex("""versionCode\s*=\s*(\d+)""")
+private val versionNameRegex = Regex("""versionName\s*=\s*"([^"]+)"""")
+
+/** The `defaultConfig { ... }` slice of the remote build script, used when the line numbers shift. */
+private fun defaultConfigBlockOf(content: String): String =
+    content.substringAfter("defaultConfig", "").substringBefore("buildTypes", "")
+
+/** Value captured by [regex] on the 1-based [lineNumber] of [content], or null when absent. */
+private fun valueOnLine(content: String, lineNumber: Int, regex: Regex): String? =
+    content.lines().getOrNull(lineNumber - 1)?.let { regex.find(it)?.groupValues?.get(1) }
+
+/**
+ * Reads the release `versionCode` out of the remote `app/build.gradle.kts`.
+ *
+ * Line [REMOTE_VERSION_CODE_LINE] is authoritative; the `defaultConfig` block and finally a
+ * whole-file scan act as fallbacks so a later reorganisation cannot silently break the check.
+ * Returns -1 when nothing could be parsed.
+ */
+private fun parseRemoteVersionCode(content: String): Int {
+    valueOnLine(content, REMOTE_VERSION_CODE_LINE, versionCodeRegex)?.toIntOrNull()?.let { return it }
+    versionCodeRegex.find(defaultConfigBlockOf(content))?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+    return versionCodeRegex.find(content)?.groupValues?.get(1)?.toIntOrNull() ?: -1
+}
+
+/** Reads the release `versionName` with the same line-first strategy as [parseRemoteVersionCode]. */
+private fun parseRemoteVersionName(content: String): String {
+    valueOnLine(content, REMOTE_VERSION_NAME_LINE, versionNameRegex)?.let { return it }
+    versionNameRegex.find(defaultConfigBlockOf(content))?.groupValues?.get(1)?.let { return it }
+    return versionNameRegex.find(content)?.groupValues?.get(1) ?: "unknown"
+}
+
 private fun startUpdateDownload(context: Context) {
     try {
-        val url = "https://github.com/ERSAN-exe/CountDayDown/releases/latest/download/app-release.apk"
-        val request = DownloadManager.Request(url.toUri())
+        val request = DownloadManager.Request(RELEASE_APK_URL.toUri())
             .setTitle(context.getString(R.string.app_name))
             .setDescription(context.getString(R.string.download_start))
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -4583,17 +4634,20 @@ private fun checkUpdate(context: Context, scope: CoroutineScope, silent: Boolean
                 }
             }
             
-            val connection = (URL("https://raw.githubusercontent.com/ERSAN-exe/CountDayDown/master/app/build.gradle.kts").openConnection() as HttpURLConnection).apply {
+            val connection = (URL(REMOTE_BUILD_GRADLE_URL).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
                 connectTimeout = 10000
                 readTimeout = 10000
+                useCaches = false
+                setRequestProperty("User-Agent", "CountDayDown-UpdateChecker")
+                setRequestProperty("Accept", "text/plain")
             }
+            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
             val content = connection.inputStream.bufferedReader().use { it.readText() }
             
-            val versionCodeRegex = Regex("""versionCode\s*=\s*(\d+)""")
-            val versionNameRegex = Regex("""versionName\s*=\s*"([^"]+)"""")
-            
-            val remoteVersionCode = versionCodeRegex.find(content)?.groupValues?.get(1)?.toIntOrNull() ?: -1
-            val remoteVersionName = versionNameRegex.find(content)?.groupValues?.get(1) ?: "unknown"
+            // Line 15 of the remote script declares `versionCode`, line 16 `versionName`.
+            val remoteVersionCode = parseRemoteVersionCode(content)
+            val remoteVersionName = parseRemoteVersionName(content)
             
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             val currentVersionCode = packageInfo.longVersionCode.toInt()
