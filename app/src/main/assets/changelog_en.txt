@@ -1,7 +1,18 @@
 =============================
-v1.6 Changelog
+v1.6.1 Changelog
 September 25, 2026
 =============================
+Fixed an issue where transition animations were abnormal when using the swipe-to-back gesture.
+Fixed an issue where the app did not automatically prompt for installation after downloading an update.
+Fixed an issue where the color palette did not track touch sliding.
+Modified the search box animation.
+
+-----------------------------
+Previous Changelogs
+-----------------------------
+v1.6 Changelog
+September 25, 2026
+
 Added multiple image display for countdown cards with a stacked layout.
 Added camera capture functionality.
 Added search functionality.
@@ -9,8 +20,6 @@ Modified the homepage sorting rule to prioritize countdown days at the top.
 Fixed the confirm button on the image picker being clickable while no image is selected.
 Fixed an issue where changing the color after selecting an image caused the image to disappear.
 
------------------------------
-Previous Changelogs
 -----------------------------
 v1.5 Changelog
 September 12, 2026

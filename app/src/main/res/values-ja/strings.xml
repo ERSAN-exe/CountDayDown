@@ -74,7 +74,7 @@
     <string name="rgb_edit">RGBカラー</string>
     <string name="hex_edit">HEXカラー</string>
     <string name="past">経過</string>
-    <string name="version_text">バージョン v1.6</string>
+    <string name="version_text">バージョン v1.6.1</string>
     <string name="saved_fonts">追加されたフォント</string>
     <string name="create_card">新規カード作成</string>
     <string name="edit_card">編集</string>
@@ -139,6 +139,7 @@
     <string name="update_dialog_title">新しいバージョンが見つかりました</string>
     <string name="update_dialog_msg">新しいバージョン (v%1$s) が利用可能です。\n(コード: %2$d → %3$d)\n\nダウンロードしてインストールしますか？</string>
     <string name="download_start">ダウンロードを開始します&#8230;</string>
+    <string name="allow_install_permission">更新を完了するには不明なアプリのインストールを許可してください</string>
     <string name="github">GitHub</string>
     <string name="crop_title">写真を切り取る</string>
     <string name="custom_font">カスタムフォント</string>

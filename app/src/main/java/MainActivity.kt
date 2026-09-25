@@ -150,6 +150,7 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import android.content.ContentValues
 import android.provider.MediaStore
+import android.provider.Settings
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.Zero23.countdown.data.BackupData
@@ -164,40 +165,59 @@ class MainActivity : ComponentActivity() {
         override fun onReceive(context: Context, intent: Intent) {
             if (DownloadManager.ACTION_DOWNLOAD_COMPLETE == intent.action) {
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                val dm = context.getSystemService(DOWNLOAD_SERVICE) as DownloadManager
-                val query = DownloadManager.Query().setFilterById(id)
-                val cursor = dm.query(query)
-                if (cursor.moveToFirst()) {
-                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                    if (statusIndex != -1 && DownloadManager.STATUS_SUCCESSFUL == cursor.getInt(statusIndex)) {
-                        val uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
-                        if (uriIndex != -1) {
-                            val uriString = cursor.getString(uriIndex)
-                            if (uriString != null) {
-                                val uri = uriString.toUri()
-                                installApk(context, uri)
+                if (id != -1L) {
+                    val dm = context.getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                    val downloadedUri = try { dm.getUriForDownloadedFile(id) } catch (_: Exception) { null }
+                    if (downloadedUri != null) {
+                        installApk(context, downloadedUri)
+                    } else {
+                        val query = DownloadManager.Query().setFilterById(id)
+                        val cursor = dm.query(query)
+                        if (cursor != null) {
+                            if (cursor.moveToFirst()) {
+                                val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                                if (statusIndex != -1 && DownloadManager.STATUS_SUCCESSFUL == cursor.getInt(statusIndex)) {
+                                    val uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                                    if (uriIndex != -1) {
+                                        val uriString = cursor.getString(uriIndex)
+                                        if (uriString != null) {
+                                            installApk(context, uriString.toUri())
+                                        }
+                                    }
+                                }
                             }
+                            cursor.close()
                         }
                     }
                 }
-                cursor.close()
             }
         }
     }
 
     private fun installApk(context: Context, uri: Uri) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            
+            if (!context.packageManager.canRequestPackageInstalls()) {
+                val settingsIntent = Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    "package:${context.packageName}".toUri()
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(settingsIntent)
+                Toast.makeText(context, R.string.allow_install_permission, Toast.LENGTH_LONG).show()
+                return
+            }
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
             val apkUri = if (uri.scheme == "content") {
                 uri
             } else {
-                val file = File(uri.path!!)
+                val path = uri.path ?: return
+                val file = File(path)
                 FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             }
-            
             intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
             context.startActivity(intent)
         } catch (e: Exception) {
@@ -678,11 +698,22 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
             // While the search is open the field and the search button share one silhouette: the
             // corners facing each other are squared off so both backgrounds read as a single bar.
             val searchFieldShape = RoundedCornerShape(topStart = 12.dp, topEnd = 0.dp, bottomEnd = 0.dp, bottomStart = 12.dp)
-            val searchButtonShape = if (isSearchActive) {
-                RoundedCornerShape(topStart = 0.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 0.dp)
-            } else {
-                RoundedCornerShape(12.dp)
-            }
+            val searchButtonTopStart by animateDpAsState(
+                targetValue = if (isSearchActive) 0.dp else 12.dp,
+                animationSpec = tween(durationMillis = if (isSearchActive) 300 else 700),
+                label = "searchButtonTopStart"
+            )
+            val searchButtonBottomStart by animateDpAsState(
+                targetValue = if (isSearchActive) 0.dp else 12.dp,
+                animationSpec = tween(durationMillis = if (isSearchActive) 300 else 700),
+                label = "searchButtonBottomStart"
+            )
+            val searchButtonShape = RoundedCornerShape(
+                topStart = searchButtonTopStart,
+                topEnd = 12.dp,
+                bottomEnd = 12.dp,
+                bottomStart = searchButtonBottomStart
+            )
 
             // Custom Top Bar Area (the search field unfolds from the search button while the
             // app title fades out)
@@ -1660,8 +1691,8 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.clickable {
-                                    val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                                     }
                                     context.startActivity(intent)
                                 }
@@ -3008,8 +3039,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.padding(bottom = 16.dp).clickable {
-                                                    val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                                                     }
                                                     context.startActivity(intent)
                                                 }

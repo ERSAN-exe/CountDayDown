@@ -73,7 +73,7 @@
     <string name="rgb_edit">RGB 调色</string>
     <string name="hex_edit">HEX 调色</string>
     <string name="past">已过去</string>
-    <string name="version_text">版本v1.6</string>
+    <string name="version_text">版本v1.6.1</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>
@@ -137,6 +137,7 @@
     <string name="update_dialog_title">发现新版本</string>
     <string name="update_dialog_msg">发现新版本 (v%1$s)\n(版本代码: %2$d → %3$d)\n\n是否立即下载并安装？</string>
     <string name="download_start">开始下载&#8230;</string>
+    <string name="allow_install_permission">请允许安装未知应用权限以完成更新</string>
     <string name="github">GitHub</string>
     <string name="crop_title">裁剪照片</string>
     <string name="custom_font">自定义字体</string>
