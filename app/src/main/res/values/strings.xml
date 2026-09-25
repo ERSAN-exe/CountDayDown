@@ -74,7 +74,7 @@
     <string name="rgb_edit">RGB Edit</string>
     <string name="hex_edit">HEX Edit</string>
     <string name="past">Past</string>
-    <string name="version_text">Version v1.6.1</string>
+    <string name="version_text">Version v1.6</string>
     <string name="create_card">Create New Card</string>
     <string name="edit_card">Edit</string>
     <string name="event_name">Event Name</string>
@@ -136,7 +136,6 @@
     <string name="update_dialog_title">New Version Found</string>
     <string name="update_dialog_msg">New version (v%1$s) available.\n(Code: %2$d → %3$d)\n\nWould you like to download and install it?</string>
     <string name="download_start">Starting download&#8230;</string>
-    <string name="allow_install_permission">Please allow installing unknown apps to complete the update</string>
     <string name="github">GitHub</string>
     <string name="crop_title">Crop Photo</string>
     <string name="export_success">Exported successfully</string>

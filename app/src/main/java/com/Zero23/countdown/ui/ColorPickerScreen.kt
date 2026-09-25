@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -369,21 +370,25 @@ fun ColorPickerScreen(
                             Canvas(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .pointerInput(widthPx, heightPx) {
-                                        fun handleTouch(position: Offset) {
-                                            saturation = (position.x / widthPx).coerceIn(0f, 1f)
-                                            value = (1f - (position.y / heightPx)).coerceIn(0f, 1f)
+                                    .pointerInput(hue) {
+                                        fun handleTouch(offset: Offset) {
+                                            saturation = (offset.x / widthPx).coerceIn(0f, 1f)
+                                            value = (1f - (offset.y / heightPx)).coerceIn(0f, 1f)
                                             updateColorFromHsv()
                                         }
-                                        detectDragGestures(
-                                            onDragStart = { offset ->
-                                                handleTouch(offset)
-                                            },
-                                            onDrag = { change, _ ->
-                                                change.consume()
-                                                handleTouch(change.position)
-                                            }
-                                        )
+                                        detectTapGestures(onTap = { handleTouch(it) })
+                                    }
+                                    .pointerInput(hue) {
+                                        detectDragGestures { change, dragAmount ->
+                                            change.consume()
+                                            val currentPos = Offset(
+                                                x = (saturation * widthPx + dragAmount.x).coerceIn(0f, widthPx),
+                                                y = ((1f - value) * heightPx + dragAmount.y).coerceIn(0f, heightPx)
+                                            )
+                                            saturation = (currentPos.x / widthPx).coerceIn(0f, 1f)
+                                            value = (1f - (currentPos.y / heightPx)).coerceIn(0f, 1f)
+                                            updateColorFromHsv()
+                                        }
                                     }
                             ) {
                                 // Draw base color with saturation gradient (white to pure color)
@@ -424,20 +429,20 @@ fun ColorPickerScreen(
                             Canvas(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .pointerInput(heightPx) {
-                                        fun handleTouch(position: Offset) {
-                                            hue = (position.y / heightPx).coerceIn(0f, 1f) * 360f
+                                    .pointerInput(Unit) {
+                                        fun handleTouch(offset: Offset) {
+                                            hue = (offset.y / heightPx).coerceIn(0f, 1f) * 360f
                                             updateColorFromHsv()
                                         }
-                                        detectDragGestures(
-                                            onDragStart = { offset ->
-                                                handleTouch(offset)
-                                            },
-                                            onDrag = { change, _ ->
-                                                change.consume()
-                                                handleTouch(change.position)
-                                            }
-                                        )
+                                        detectTapGestures(onTap = { handleTouch(it) })
+                                    }
+                                    .pointerInput(Unit) {
+                                        detectDragGestures { change, dragAmount ->
+                                            change.consume()
+                                            val currentY = ((hue / 360f) * heightPx + dragAmount.y).coerceIn(0f, heightPx)
+                                            hue = (currentY / heightPx) * 360f
+                                            updateColorFromHsv()
+                                        }
                                     }
                             ) {
                                 // Hue colors array
