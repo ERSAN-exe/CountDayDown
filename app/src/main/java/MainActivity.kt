@@ -112,9 +112,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.Zero23.countdown.ui.ImagePickerScreen
+import com.Zero23.countdown.data.BACKUP_IMAGE_ENTRY_PREFIX
 import com.Zero23.countdown.data.CountdownEvent
 import com.Zero23.countdown.data.DataManager
 import com.Zero23.countdown.data.SavedFont
+import com.Zero23.countdown.data.bgImageEntryKey
+import com.Zero23.countdown.data.fromZipEntryUris
+import com.Zero23.countdown.data.squareImageEntryKey
+import com.Zero23.countdown.data.widgetImageEntryKey
+import com.Zero23.countdown.data.zipEntryUris
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
@@ -160,48 +166,89 @@ import kotlin.time.Duration.Companion.minutes
 
 class MainActivity : ComponentActivity() {
 
+    /** Downloaded APK waiting for the "install unknown apps" grant; retried from [onResume]. */
+    private var pendingInstallUri: Uri? = null
+
     private val updateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (DownloadManager.ACTION_DOWNLOAD_COMPLETE == intent.action) {
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                if (id == -1L) return
                 val dm = context.getSystemService(DOWNLOAD_SERVICE) as DownloadManager
-                val query = DownloadManager.Query().setFilterById(id)
-                val cursor = dm.query(query)
-                if (cursor.moveToFirst()) {
-                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                    if (statusIndex != -1 && DownloadManager.STATUS_SUCCESSFUL == cursor.getInt(statusIndex)) {
-                        val uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
-                        if (uriIndex != -1) {
-                            val uriString = cursor.getString(uriIndex)
-                            if (uriString != null) {
-                                val uri = uriString.toUri()
-                                installApk(context, uri)
-                            }
-                        }
-                    }
+
+                // The content URI DownloadManager hands out for our own download is the form the
+                // package installer can read reliably under scoped storage, so it is tried first
+                // and the raw file path is kept as a fallback for older releases.
+                val downloadedUri = try {
+                    dm.getUriForDownloadedFile(id)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
                 }
-                cursor.close()
+                if (downloadedUri != null) {
+                    installApk(context, downloadedUri)
+                    return
+                }
+
+                dm.query(DownloadManager.Query().setFilterById(id)).use { cursor ->
+                    if (!cursor.moveToFirst()) return
+                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                    if (statusIndex == -1 || DownloadManager.STATUS_SUCCESSFUL != cursor.getInt(statusIndex)) return
+                    val uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                    if (uriIndex == -1) return
+                    val uriString = cursor.getString(uriIndex) ?: return
+                    installApk(context, uriString.toUri())
+                }
             }
         }
     }
 
     private fun installApk(context: Context, uri: Uri) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            
+            // Android 8+ blocks the system installer unless this app holds the "install unknown
+            // apps" grant, so send the user to that toggle and finish the update on the way back.
+            if (!context.packageManager.canRequestPackageInstalls()) {
+                pendingInstallUri = uri
+                val settingsIntent = Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    "package:${context.packageName}".toUri()
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(settingsIntent)
+                Toast.makeText(context, R.string.allow_install_permission, Toast.LENGTH_LONG).show()
+                return
+            }
+
             val apkUri = if (uri.scheme == "content") {
                 uri
             } else {
-                val file = File(uri.path!!)
+                val path = uri.path ?: return
+                val file = File(path)
+                if (!file.canRead()) return
                 FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             }
-            
-            intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+            }
             context.startActivity(intent)
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Coming back from the "install unknown apps" screen: finish the install the user already
+        // asked for instead of making them download the APK again. The pending URI lives on this
+        // Activity, so a cold start forgets it and no stale install can be triggered much later.
+        val uri = pendingInstallUri ?: return
+        if (packageManager.canRequestPackageInstalls()) {
+            pendingInstallUri = null
+            installApk(this, uri)
         }
     }
 
@@ -678,11 +725,22 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
             // While the search is open the field and the search button share one silhouette: the
             // corners facing each other are squared off so both backgrounds read as a single bar.
             val searchFieldShape = RoundedCornerShape(topStart = 12.dp, topEnd = 0.dp, bottomEnd = 0.dp, bottomStart = 12.dp)
-            val searchButtonShape = if (isSearchActive) {
-                RoundedCornerShape(topStart = 0.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 0.dp)
-            } else {
-                RoundedCornerShape(12.dp)
-            }
+
+            // Radius of the two button corners that touch the field. They are animated instead of
+            // switched, and collapsing runs slower than expanding on purpose: the button keeps its
+            // squared off corners while the field is still retracting, so the rounding can never
+            // snap back early and leave a notch between the field and the button.
+            val searchButtonCornerRadius by animateDpAsState(
+                targetValue = if (isSearchActive) 0.dp else 12.dp,
+                animationSpec = tween(durationMillis = if (isSearchActive) 300 else 700),
+                label = "searchButtonCornerRadius"
+            )
+            val searchButtonShape = RoundedCornerShape(
+                topStart = searchButtonCornerRadius,
+                topEnd = 12.dp,
+                bottomEnd = 12.dp,
+                bottomStart = searchButtonCornerRadius
+            )
 
             // Custom Top Bar Area (the search field unfolds from the search button while the
             // app title fades out)
@@ -1132,10 +1190,11 @@ fun SettingsScreen(
                             backup.events.forEach { event ->
                                 // Export every stacked background image (multi-image cards)
                                 event.getBgImageUris().forEachIndexed { index, uriStr ->
-                                    if (!uriStr.startsWith("images/")) {
-                                        // Keep the legacy "${id}_bg" key for the first image
-                                        val key = if (index == 0) "${event.id}_bg" else "${event.id}_bg_$index"
-                                        val entryName = "images/$key"
+                                    if (!uriStr.startsWith(BACKUP_IMAGE_ENTRY_PREFIX)) {
+                                        // The key is shared with zipEntryUris(), so the JSON and the
+                                        // zip always agree on where a picture is stored.
+                                        val key = bgImageEntryKey(event.id, index)
+                                        val entryName = BACKUP_IMAGE_ENTRY_PREFIX + key
                                         try {
                                             resolver.openInputStream(uriStr.toUri())?.use { input ->
                                                 zos.putNextEntry(ZipEntry(entryName))
@@ -1148,9 +1207,9 @@ fun SettingsScreen(
                                 }
                                 // Export the square crops used by the grid ("small card") layout
                                 event.backgroundSquareImageUris?.forEachIndexed { index, uriStr ->
-                                    if (!uriStr.startsWith("images/")) {
-                                        val key = "${event.id}_sq_$index"
-                                        val entryName = "images/$key"
+                                    if (!uriStr.startsWith(BACKUP_IMAGE_ENTRY_PREFIX)) {
+                                        val key = squareImageEntryKey(event.id, index)
+                                        val entryName = BACKUP_IMAGE_ENTRY_PREFIX + key
                                         try {
                                             resolver.openInputStream(uriStr.toUri())?.use { input ->
                                                 zos.putNextEntry(ZipEntry(entryName))
@@ -1162,14 +1221,15 @@ fun SettingsScreen(
                                     }
                                 }
                                 event.widgetImageUri?.let { uriStr ->
-                                    if (!uriStr.startsWith("images/")) {
-                                        val entryName = "images/${event.id}_widget"
+                                    if (!uriStr.startsWith(BACKUP_IMAGE_ENTRY_PREFIX)) {
+                                        val key = widgetImageEntryKey(event.id)
+                                        val entryName = BACKUP_IMAGE_ENTRY_PREFIX + key
                                         try {
                                             resolver.openInputStream(uriStr.toUri())?.use { input ->
                                                 zos.putNextEntry(ZipEntry(entryName))
                                                 input.copyTo(zos)
                                                 zos.closeEntry()
-                                                zipImages["${event.id}_widget"] = entryName
+                                                zipImages[key] = entryName
                                             }
                                         } catch (_: Exception) {}
                                     }
@@ -1194,22 +1254,7 @@ fun SettingsScreen(
                             
                             val backupForZip = backup.copy(
                                 appBackgroundImage = zipAppBgName ?: backup.appBackgroundImage,
-                                events = backup.events.map { event ->
-                                    val zippedBgUris = event.getBgImageUris().mapIndexed { index, uriStr ->
-                                        val key = if (index == 0) "${event.id}_bg" else "${event.id}_bg_$index"
-                                        zipImages[key] ?: uriStr
-                                    }
-                                    val zippedSquareUris = event.backgroundSquareImageUris?.mapIndexed { index, uriStr ->
-                                        zipImages["${event.id}_sq_$index"] ?: uriStr
-                                    }
-                                    event.copy(
-                                        backgroundImageUri = zippedBgUris.firstOrNull() ?: event.backgroundImageUri,
-                                        backgroundImageUris = if (zippedBgUris.size > 1) zippedBgUris else event.backgroundImageUris,
-                                        backgroundSquareImageUris = zippedSquareUris,
-                                        widgetImageUri = zipImages["${event.id}_widget"] ?: event.widgetImageUri,
-                                        customFontPath = zipFonts[event.customFontPath] ?: event.customFontPath
-                                    )
-                                }
+                                events = backup.events.map { it.zipEntryUris(zipImages, zipFonts) }
                             )
                             
                             zos.putNextEntry(ZipEntry("backup.json"))
@@ -1257,7 +1302,7 @@ fun SettingsScreen(
                                 val fontsDir = File(context.filesDir, "imported_fonts").apply { mkdirs() }
                                 
                                 var restoredAppBg = backup.appBackgroundImage
-                                if (restoredAppBg?.startsWith("images/") == true) {
+                                if (restoredAppBg?.startsWith(BACKUP_IMAGE_ENTRY_PREFIX) == true) {
                                     imageFiles[restoredAppBg]?.let { data ->
                                         val file = File(imagesDir, "app_bg")
                                         file.writeBytes(data)
@@ -1266,39 +1311,14 @@ fun SettingsScreen(
                                 }
 
                                 val restoredEvents = backup.events.map { event ->
-                                    // Restore every stacked background image (multi-image cards)
-                                    val restoredBgUris = event.getBgImageUris().mapIndexed { index, uriStr ->
-                                        if (uriStr.startsWith("images/")) {
-                                            // Legacy backups stored the first image as "images/{id}_bg"
-                                            val data = imageFiles[uriStr]
-                                                ?: if (index == 0) imageFiles["images/${event.id}_bg"] else null
-                                            if (data != null) {
-                                                val file = File(imagesDir, "${event.id}_bg_$index")
-                                                file.writeBytes(data)
-                                                Uri.fromFile(file).toString()
-                                            } else uriStr
-                                        } else uriStr
+                                    // Pictures travel as zip entries, so they are written back into
+                                    // the app's own directory and the card is pointed at the copies
+                                    val restoredEvent = event.fromZipEntryUris(imageFiles) { entryName, fileName ->
+                                        val file = File(imagesDir, fileName)
+                                        file.writeBytes(imageFiles.getValue(entryName))
+                                        Uri.fromFile(file).toString()
                                     }
-                                    val bgUri = restoredBgUris.firstOrNull() ?: event.backgroundImageUri
-                                    val restoredSquareUris = event.backgroundSquareImageUris?.mapIndexed { index, uriStr ->
-                                        if (uriStr.startsWith("images/")) {
-                                            imageFiles[uriStr]?.let { data ->
-                                                val file = File(imagesDir, "${event.id}_sq_$index")
-                                                file.writeBytes(data)
-                                                Uri.fromFile(file).toString()
-                                            } ?: uriStr
-                                        } else uriStr
-                                    }
-                                    var widgetUri = event.widgetImageUri
-                                    var fontPath = event.customFontPath
-
-                                    if (widgetUri?.startsWith("images/") == true) {
-                                        imageFiles[widgetUri]?.let { data ->
-                                            val file = File(imagesDir, "${event.id}_widget")
-                                            file.writeBytes(data)
-                                            widgetUri = Uri.fromFile(file).toString()
-                                        }
-                                    }
+                                    var fontPath = restoredEvent.customFontPath
                                     if (fontPath?.startsWith("fonts/") == true) {
                                         fontFiles[fontPath]?.let { data ->
                                             val originalName = fontPath.substringAfterLast("/")
@@ -1307,13 +1327,7 @@ fun SettingsScreen(
                                             fontPath = file.absolutePath
                                         }
                                     }
-                                    event.copy(
-                                        backgroundImageUri = bgUri,
-                                        backgroundImageUris = if (restoredBgUris.size > 1) restoredBgUris else event.backgroundImageUris,
-                                        backgroundSquareImageUris = restoredSquareUris,
-                                        widgetImageUri = widgetUri,
-                                        customFontPath = fontPath
-                                    )
+                                    restoredEvent.copy(customFontPath = fontPath)
                                 }
                                 
                                 dataManager.restoreAllData(backup.copy(
@@ -1357,7 +1371,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
-        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
                 modifier = Modifier
@@ -1924,9 +1938,9 @@ private suspend fun extractColorFromUri(context: Context, uri: Uri): String? {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
     val context = LocalContext.current
-    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
     val noChangelogMsg = stringResource(R.string.no_changelog)
     val aiDisclaimer = stringResource(R.string.changelog_ai_disclaimer)
     val configuration = LocalConfiguration.current
@@ -1953,7 +1967,7 @@ fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
     }
 
     Scaffold(
-        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {}
     ) { innerPadding ->
         Column(
@@ -2293,7 +2307,6 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 3 })
     val selectedTab = pagerState.currentPage
-    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
     
     val nameEmptyMsg = stringResource(R.string.name_cannot_be_empty)
     val cannotExcludeAllMsg = stringResource(R.string.cannot_exclude_all)
@@ -2352,7 +2365,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     }
 
     Scaffold(
-        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
                 modifier = Modifier

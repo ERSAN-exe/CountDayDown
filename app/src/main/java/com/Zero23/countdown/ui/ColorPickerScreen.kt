@@ -70,27 +70,44 @@ fun ColorPickerScreen(
         return String.format("%02X%02X%02X", (red * 255).toInt(), (green * 255).toInt(), (blue * 255).toInt())
     }
 
-    // State for HSV
-    val hsv = remember(selectedColor) {
+    // State for HSV & Inputs
+    val initialHsv = remember {
         val arr = FloatArray(3)
         android.graphics.Color.colorToHSV(selectedColor.toArgb(), arr)
         arr
     }
 
-    var hue by remember(selectedColor) { mutableFloatStateOf(hsv[0]) }
-    var saturation by remember(selectedColor) { mutableFloatStateOf(hsv[1]) }
-    var value by remember(selectedColor) { mutableFloatStateOf(hsv[2]) }
+    var hue by remember { mutableFloatStateOf(initialHsv[0]) }
+    var saturation by remember { mutableFloatStateOf(initialHsv[1]) }
+    var value by remember { mutableFloatStateOf(initialHsv[2]) }
+
+    var hexInput by remember { mutableStateOf(selectedColor.toHex()) }
+    var rInput by remember { mutableStateOf(((selectedColor.red * 255).toInt()).toString()) }
+    var gInput by remember { mutableStateOf(((selectedColor.green * 255).toInt()).toString()) }
+    var bInput by remember { mutableStateOf(((selectedColor.blue * 255).toInt()).toString()) }
+
+    fun updateColor(color: Color) {
+        selectedColor = color
+        val arr = FloatArray(3)
+        android.graphics.Color.colorToHSV(color.toArgb(), arr)
+        hue = arr[0]
+        saturation = arr[1]
+        value = arr[2]
+        hexInput = color.toHex()
+        rInput = ((color.red * 255).toInt()).toString()
+        gInput = ((color.green * 255).toInt()).toString()
+        bInput = ((color.blue * 255).toInt()).toString()
+    }
 
     fun updateColorFromHsv() {
         val colorInt = android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value))
-        selectedColor = Color(colorInt)
+        val color = Color(colorInt)
+        selectedColor = color
+        hexInput = color.toHex()
+        rInput = ((color.red * 255).toInt()).toString()
+        gInput = ((color.green * 255).toInt()).toString()
+        bInput = ((color.blue * 255).toInt()).toString()
     }
-
-    // Text field values
-    var hexInput by remember(selectedColor) { mutableStateOf(selectedColor.toHex()) }
-    var rInput by remember(selectedColor) { mutableStateOf(((selectedColor.red * 255).toInt()).toString()) }
-    var gInput by remember(selectedColor) { mutableStateOf(((selectedColor.green * 255).toInt()).toString()) }
-    var bInput by remember(selectedColor) { mutableStateOf(((selectedColor.blue * 255).toInt()).toString()) }
 
     val presets = listOf(
         "#2196F3", "#F44336", "#4CAF50", "#FFEB3B", "#9C27B0",
@@ -168,40 +185,28 @@ fun ColorPickerScreen(
                     }
                 }
             },
-            bottomBar = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 24.dp)
-                        .navigationBarsPadding(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+            floatingActionButton = {
+                FloatingActionButton(
+                    onClick = {
+                        val finalHex = "#${selectedColor.toHex()}"
+                        val isPreset = presets.any { it.equals(finalHex, ignoreCase = true) }
+                        if (!isPreset) {
+                            scope.launch {
+                                dataManager.addSavedColor(finalHex)
+                            }
+                        }
+                        navController.previousBackStackEntry?.savedStateHandle?.set("selected_color", finalHex)
+                        navController.popBackStack()
+                    },
+                    containerColor = pickerAccent,
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    // Confirm/Check Button
-                    Box(
-                        modifier = Modifier
-                            .background(pickerAccent, RoundedCornerShape(16.dp))
-                            .size(56.dp)
-                            .clickable {
-                                val finalHex = "#${selectedColor.toHex()}"
-                                val isPreset = presets.any { it.equals(finalHex, ignoreCase = true) }
-                                if (!isPreset) {
-                                    scope.launch {
-                                        dataManager.addSavedColor(finalHex)
-                                    }
-                                }
-                                navController.previousBackStackEntry?.savedStateHandle?.set("selected_color", finalHex)
-                                navController.popBackStack()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = stringResource(R.string.confirm),
-                            tint = contentColor,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = stringResource(R.string.confirm),
+                        tint = contentColor,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         ) { innerPadding ->
@@ -266,7 +271,7 @@ fun ColorPickerScreen(
                                                     shape = RoundedCornerShape(10.dp)
                                                 )
                                                 .clickable {
-                                                    selectedColor = color
+                                                    updateColor(color)
                                                 }
                                         )
                                     }
@@ -318,7 +323,7 @@ fun ColorPickerScreen(
                                                     .background(color)
                                                     .combinedClickable(
                                                         onClick = {
-                                                            selectedColor = color
+                                                            updateColor(color)
                                                         },
                                                         onLongClick = {
                                                             scope.launch {
@@ -494,7 +499,7 @@ fun ColorPickerScreen(
                                         hexInput = cleaned
                                         if (cleaned.length == 6) {
                                             try {
-                                                selectedColor = Color("#$cleaned".toColorInt())
+                                                updateColor(Color("#$cleaned".toColorInt()))
                                             } catch (_: Exception) {}
                                         }
                                     },
@@ -525,7 +530,7 @@ fun ColorPickerScreen(
                                             val r = it.toInt().coerceIn(0, 255)
                                             val currentG = (selectedColor.green * 255).toInt()
                                             val currentB = (selectedColor.blue * 255).toInt()
-                                            selectedColor = Color(r, currentG, currentB)
+                                            updateColor(Color(r, currentG, currentB))
                                         } catch (_: Exception) {}
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -546,7 +551,7 @@ fun ColorPickerScreen(
                                             val currentR = (selectedColor.red * 255).toInt()
                                             val g = it.toInt().coerceIn(0, 255)
                                             val currentB = (selectedColor.blue * 255).toInt()
-                                            selectedColor = Color(currentR, g, currentB)
+                                            updateColor(Color(currentR, g, currentB))
                                         } catch (_: Exception) {}
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -567,7 +572,7 @@ fun ColorPickerScreen(
                                             val currentR = (selectedColor.red * 255).toInt()
                                             val currentG = (selectedColor.green * 255).toInt()
                                             val b = it.toInt().coerceIn(0, 255)
-                                            selectedColor = Color(currentR, currentG, b)
+                                            updateColor(Color(currentR, currentG, b))
                                         } catch (_: Exception) {}
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

@@ -37,7 +37,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -245,6 +247,12 @@ fun ImagePickerScreen(
     val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
     val selectionColor = MaterialTheme.colorScheme.primary
 
+    // Height of the floating bottom bar (its margins and the navigation bar inset included),
+    // measured at runtime so the grid can reserve exactly the room it needs. The previous fixed
+    // padding was smaller than the real bar on most devices, so the last row slid underneath it.
+    var bottomBarHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+
     Scaffold(
         containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
     ) { innerPadding ->
@@ -275,7 +283,9 @@ fun ImagePickerScreen(
                     columns = GridCells.Fixed(3),
                     contentPadding = PaddingValues(
                         top = 100.dp,
-                        bottom = 120.dp,
+                        // Clears the floating bottom bar; until the bar has been measured the
+                        // previous fixed value is used as a floor, so nothing ever gets tighter.
+                        bottom = (bottomBarHeight + 16.dp).coerceAtLeast(120.dp),
                         start = 16.dp,
                         end = 16.dp
                     ),
@@ -382,6 +392,12 @@ fun ImagePickerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
+                    // Measured ahead of the paddings, so the reported height covers the whole bar:
+                    // navigation bar inset, outer margins and content. The grid reads it back to
+                    // keep its last row clear of the bar instead of guessing a fixed padding.
+                    .onSizeChanged { barSize ->
+                        bottomBarHeight = with(density) { barSize.height.toDp() }
+                    }
                     .navigationBarsPadding()
                     .padding(horizontal = 24.dp, vertical = 24.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
