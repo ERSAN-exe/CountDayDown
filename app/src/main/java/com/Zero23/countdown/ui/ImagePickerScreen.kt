@@ -49,6 +49,12 @@ import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.Zero23.countdown.R
+import com.Zero23.countdown.TOP_BAR_ACTION_CORNER
+import com.Zero23.countdown.TOP_BAR_ACTION_OFFSET
+import com.Zero23.countdown.TOP_BAR_CONTENT_HEIGHT
+import com.Zero23.countdown.TOP_BAR_TITLE_CORNER
+import com.Zero23.countdown.TOP_BAR_TITLE_FONT_SIZE
+import com.Zero23.countdown.TOP_BAR_TITLE_LINE_HEIGHT
 import com.Zero23.countdown.data.DataManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -282,7 +288,10 @@ fun ImagePickerScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     contentPadding = PaddingValues(
-                        top = 100.dp,
+                        // Clears the floating top bar, which is TOP_BAR_CONTENT_HEIGHT of content
+                        // plus the bar's own 8dp inset. The extra two offsets are the difference
+                        // between the bar's old natural height and that fixed height.
+                        top = 100.dp + TOP_BAR_ACTION_OFFSET * 2,
                         // Clears the floating bottom bar; until the bar has been measured the
                         // previous fixed value is used as a floor, so nothing ever gets tighter.
                         bottom = (bottomBarHeight + 16.dp).coerceAtLeast(120.dp),
@@ -351,14 +360,18 @@ fun ImagePickerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    // Same fixed content height as the settings screen, so this title and its back
+                    // button share one centre line with the rest of the app instead of depending on
+                    // how tall the title pill happens to be.
+                    .height(TOP_BAR_CONTENT_HEIGHT),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Title Box
                 Box(
                     modifier = Modifier
-                        .background(boxColor, RoundedCornerShape(24.dp))
+                        .background(boxColor, RoundedCornerShape(TOP_BAR_TITLE_CORNER))
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -366,24 +379,32 @@ fun ImagePickerScreen(
                         text = stringResource(R.string.select_image),
                         fontWeight = FontWeight.Bold,
                         color = contentColor,
-                        fontSize = 20.sp
+                        fontSize = TOP_BAR_TITLE_FONT_SIZE,
+                        lineHeight = TOP_BAR_TITLE_LINE_HEIGHT
                     )
                 }
 
-                // Back Button
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(boxColor)
-                        .clickable { navController.popBackStack() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
-                        tint = contentColor
-                    )
+                // Back Button, or just the slot when the shared button takes this corner over: that
+                // happens when the page was opened from the settings page, where the shell's button
+                // turns from the arrow into the gear and stays on screen. Opened from the add/edit
+                // form (picking a card's photos) it stays this page's own arrow.
+                if (navController.previousBackStackEntry?.destination?.route?.substringBefore('?') == "settings") {
+                    Spacer(modifier = Modifier.size(48.dp))
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(TOP_BAR_ACTION_CORNER))
+                            .background(boxColor)
+                            .clickable { navController.popBackStack() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back),
+                            tint = contentColor
+                        )
+                    }
                 }
             }
 

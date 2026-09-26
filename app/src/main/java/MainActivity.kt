@@ -71,6 +71,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -109,6 +110,7 @@ import androidx.navigation.NavType
 import androidx.palette.graphics.Palette
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.Zero23.countdown.ui.ImagePickerScreen
@@ -328,8 +330,30 @@ class MainActivity : ComponentActivity() {
 
             CountDownTheme(darkTheme = isDarkTheme, customColor = customThemeColor) {
                 val navController = rememberNavController()
-                val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+                val windowInfo = LocalWindowInfo.current
                 val screenRatio = windowInfo.containerSize.height.toFloat() / windowInfo.containerSize.width.toFloat()
+
+                // The current route drives the shared settings/back button, which lives outside the
+                // NavHost (see below) so it survives the swap between the screens.
+                val navEntry by navController.currentBackStackEntryAsState()
+                // A destination that takes arguments reports its whole pattern here - e.g.
+                // "image_picker?allowMulti={allowMulti}" instead of "image_picker" - so the bare name
+                // every comparison below is written against is the part before the "?".
+                // Before the NavHost has installed its start destination the entry is still null;
+                // treating that as "home" keeps the pinned button from blinking on cold start.
+                val currentRoute = navEntry?.destination?.route?.substringBefore('?') ?: "home"
+                // The screen underneath the current one. For a pushed child screen that is the page
+                // it was opened from, which is what decides whether the shared button takes over the
+                // child's corner (see below).
+                val callerRoute = navController.previousBackStackEntry?.destination?.route?.substringBefore('?')
+                // Only the *exit* of the settings page is signalled from here, because the shared
+                // button above the NavHost can request it too. The entrance is owned by the
+                // settings screen itself, so its cascade is guaranteed to start from hidden.
+                var settingsRowsLeaving by remember { mutableStateOf(false) }
+                // Set synchronously right before coming back to the settings page from a child, so
+                // the settings screen can already read it on the frame it enters: its rows then
+                // cascade in from the left, mirroring the page that slides in from the left.
+                var settingsRowsEnterFromLeft by remember { mutableStateOf(false) }
 
                                 // Global Crop State
                 var globalCropOriginalUri by remember { mutableStateOf<Uri?>(null) }
@@ -430,6 +454,9 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen(
                                 navController = navController,
                                 dataManager = dataManager,
+                                rowsLeaving = settingsRowsLeaving,
+                                rowsEnterFromLeft = settingsRowsEnterFromLeft,
+                                onExitRequested = { settingsRowsLeaving = true },
                                 onPickBg = { navController.navigate("image_picker?allowMulti=false") },
                                 onUpdateFound = { version, remote, local ->
                                     pendingVersionName = version
@@ -462,7 +489,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("changelog") {
-                            ChangelogScreen(navController, dataManager)
+                            ChangelogScreen(dataManager)
                         }
                         composable(
                             "add_edit?eventId={eventId}",
@@ -510,6 +537,90 @@ class MainActivity : ComponentActivity() {
                                 isDark = isDarkTheme
                             )
                         }
+                    }
+
+                    // The settings / back button is pinned here, above the NavHost, so it is
+                    // composed exactly once for home, the settings page and the child screens that
+                    // settings opens, and morphs in place while the pages slide underneath it. Every
+                    // one of those screens keeps a matching 48dp slot in this corner, so nothing
+                    // shifts: same 48dp, 12dp radius, 16dp from the right edge and
+                    // statusBarsPadding() + 8dp from the top as before.
+                    val onSettingsRoute = currentRoute == "settings"
+                    val onChildRoute = currentRoute == "changelog" || currentRoute == "color_picker" ||
+                        currentRoute == "image_picker"
+                    // Children opened from the add/edit form keep their own back arrow: there the
+                    // button is not standing in for the settings page and walks straight back to
+                    // the form instead.
+                    val childFromSettings = onChildRoute && callerRoute == "settings"
+                    val navButtonGoesBack = onSettingsRoute || childFromSettings
+                    // 0 = gear, 1 = arrow. Only the settings page shows the arrow; the gear always
+                    // means "go to the settings page", which on a child screen is also going back.
+                    var navMorphTarget by remember { mutableFloatStateOf(0f) }
+                    var navButtonLocked by remember { mutableStateOf(false) }
+                    LaunchedEffect(currentRoute) {
+                        navMorphTarget = if (onSettingsRoute) 1f else 0f
+                        delay(NAV_TRANSITION_MS.milliseconds)   // unlock once the slide has settled
+                        navButtonLocked = false
+                    }
+                    AnimatedVisibility(
+                        visible = currentRoute == "home" || onSettingsRoute || childFromSettings,
+                        enter = fadeIn(animationSpec = tween(180)),
+                        exit = fadeOut(animationSpec = tween(180)),
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        val navMorphProgress by animateFloatAsState(
+                            targetValue = navMorphTarget,
+                            animationSpec = tween(durationMillis = SETTINGS_ICON_MORPH_MS),
+                            label = "settingsNavMorph"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .statusBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                // Same extra top padding as the two top bars below, so search /
+                                // gear / arrow all land on one horizontal line.
+                                .padding(top = TOP_BAR_ACTION_OFFSET)
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(TOP_BAR_ACTION_CORNER))
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .clickable(enabled = !navButtonLocked) {
+                                    navButtonLocked = true
+                                    if (navButtonGoesBack) {
+                                        // Back to the settings page. Coming back from a child the page
+                                        // enters from the left, so the rows are asked to follow it.
+                                        if (childFromSettings) {
+                                            settingsRowsEnterFromLeft = true
+                                        } else {
+                                            settingsRowsLeaving = true
+                                        }
+                                        navController.popBackStack()
+                                    } else {
+                                        // Cleared synchronously before the page is pushed, so the
+                                        // fresh settings screen can never see stale row signals.
+                                        settingsRowsLeaving = false
+                                        settingsRowsEnterFromLeft = false
+                                        navController.navigate("settings")
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SettingsNavIcon(
+                                progress = navMorphProgress,
+                                contentDescription = stringResource(
+                                    if (onSettingsRoute) R.string.back else R.string.settings
+                                ),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    // The system back key on a child opened from settings walks the same path as the
+                    // shared button, so the settings rows still come back in from the left. Children
+                    // opened from the add/edit form are left alone, they pop straight back to it.
+                    BackHandler(enabled = childFromSettings) {
+                        settingsRowsEnterFromLeft = true
+                        navController.popBackStack()
                     }
                 }
 
@@ -724,7 +835,7 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
         Column(modifier = Modifier.padding(innerPadding)) {
             // While the search is open the field and the search button share one silhouette: the
             // corners facing each other are squared off so both backgrounds read as a single bar.
-            val searchFieldShape = RoundedCornerShape(topStart = 12.dp, topEnd = 0.dp, bottomEnd = 0.dp, bottomStart = 12.dp)
+            val searchFieldShape = RoundedCornerShape(topStart = TOP_BAR_ACTION_CORNER, topEnd = 0.dp, bottomEnd = 0.dp, bottomStart = TOP_BAR_ACTION_CORNER)
 
             // Radius of the two button corners that touch the field. They are animated instead of
             // switched, and collapsing runs slower than expanding on purpose: the button keeps its
@@ -737,8 +848,8 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
             )
             val searchButtonShape = RoundedCornerShape(
                 topStart = searchButtonCornerRadius,
-                topEnd = 12.dp,
-                bottomEnd = 12.dp,
+                topEnd = TOP_BAR_ACTION_CORNER,
+                bottomEnd = TOP_BAR_ACTION_CORNER,
                 bottomStart = searchButtonCornerRadius
             )
 
@@ -771,7 +882,7 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                             .align(Alignment.CenterStart)
                             .width(220.dp)
                             .alpha(titleAlpha)
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(TOP_BAR_TITLE_CORNER))
                             .padding(vertical = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
@@ -789,7 +900,12 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                     // left of it. The content keeps its full width, so it is only revealed.
                     Box(
                         modifier = Modifier
-                            .align(Alignment.CenterEnd)
+                            // Top aligned with the same extra padding as the button row beside it:
+                            // the two halves of the bar are then placed by the same baseline
+                            // instead of the field being centred in a row that the title pill
+                            // happens to size, which left them 2dp out of step.
+                            .align(Alignment.TopEnd)
+                            .padding(top = TOP_BAR_ACTION_OFFSET)
                             .width(searchFieldWidth)
                             .height(48.dp)
                             .clip(searchFieldShape)
@@ -848,6 +964,13 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                 }
 
                 Row(
+                    modifier = Modifier
+                        // Top aligned instead of centred: the button line then no longer depends on
+                        // how tall the title pill beside it grew, and TOP_BAR_ACTION_OFFSET puts it
+                        // on the exact same line as the pinned gear / back arrow. Padding rather
+                        // than offset, so the row keeps growing along with the line.
+                        .align(Alignment.Top)
+                        .padding(top = TOP_BAR_ACTION_OFFSET),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -874,21 +997,9 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
                         )
                     }
 
-                    // Settings Button
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .clickable {
-                                if (navController.currentDestination?.route == "home") {
-                                    navController.navigate("settings")
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
+                    // Keeps the slot of the shared settings/back button, which the app shell pins
+                    // to this exact corner so it can morph in place instead of sliding away.
+                    Spacer(modifier = Modifier.size(48.dp))
                 }
             }
 
@@ -1139,11 +1250,118 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
     }
 }
 
+// ---- Settings page animation tuning --------------------------------------------------
+// The settings rows fly in from the right edge one after another; the same numbers drive the
+// reverse (bottom-up) exit. Both cascades run on top of the navigator's own 450ms slide, and
+// the top-right icon turns between the settings gear and the back arrow while that happens.
+private const val SETTINGS_ITEM_COUNT = 10
+private const val SETTINGS_ENTER_STAGGER_MS = 45
+private const val SETTINGS_ENTER_DURATION_MS = 340
+private const val SETTINGS_EXIT_STAGGER_MS = 25
+private const val SETTINGS_EXIT_DURATION_MS = 230
+
+/**
+ * The gear/arrow morph is deliberately shorter than the push/pop slide so it is never what the
+ * user waits for. NAV_TRANSITION_MS mirrors the NavHost's tween(450) and is only used to keep
+ * the shared button from being tapped again before the slide has settled.
+ */
+private const val SETTINGS_ICON_SPIN_DEGREES = 180f
+private const val SETTINGS_ICON_MORPH_MS = 280
+private const val NAV_TRANSITION_MS = 450
+
+/**
+ * Staggered entrance/exit for a single row of the settings page, matching the direction the
+ * page itself travels: with [visible] the rows fly in from the right edge top to bottom,
+ * without it the order is reversed and every row leaves through the edge it came from. Only
+ * alpha and the translation are animated - never the layout size - so the list does not
+ * re-flow while the rows are moving.
+ */
+@Composable
+private fun Modifier.settingsSlideIn(index: Int, visible: Boolean, fromLeft: Boolean): Modifier {
+    val spec = if (visible) {
+        tween<Float>(
+            durationMillis = SETTINGS_ENTER_DURATION_MS,
+            delayMillis = index * SETTINGS_ENTER_STAGGER_MS
+        )
+    } else {
+        tween<Float>(
+            durationMillis = SETTINGS_EXIT_DURATION_MS,
+            delayMillis = (SETTINGS_ITEM_COUNT - 1 - index) * SETTINGS_EXIT_STAGGER_MS
+        )
+    }
+    val progress by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = spec,
+        label = "settingsRow$index"
+    )
+    // The travel distance is read here, at composition time, and handed to the parameter overload
+    // of graphicsLayer: a full window width is always further than a row is wide, so a hidden row
+    // is guaranteed to sit completely outside the page, and the layer can never lag behind the
+    // animation the way a state read inside the draw lambda can.
+    val travel = LocalWindowInfo.current.containerSize.width.toFloat()
+    // Coming back from a child screen the page slides in from the left, so the rows travel with it
+    // instead of against it. Leaving always runs to the right, which is the way the pop pushes the
+    // page; at progress 1 the offset is zero, so flipping the sign there cannot make anything jump.
+    val sign = if (visible && fromLeft) -1f else 1f
+    return this
+        .fillMaxWidth()
+        .graphicsLayer(
+            alpha = progress,
+            translationX = sign * (1f - progress) * travel
+        )
+}
+
+/**
+ * The 48dp button that sits at the top-right corner of both the home and the settings
+ * screens. [progress] is 0f for the settings gear and 1f for the back arrow; the gear spins
+ * while the two icons cross-fade, so the button reads as one control turning into the other.
+ */
+@Composable
+private fun SettingsNavIcon(
+    progress: Float,
+    contentDescription: String,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.graphicsLayer { rotationZ = progress * SETTINGS_ICON_SPIN_DEGREES },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Settings,
+            contentDescription = if (progress < 0.5f) contentDescription else null,
+            tint = tint,
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer { alpha = 1f - progress }
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = if (progress >= 0.5f) contentDescription else null,
+            tint = tint,
+            modifier = Modifier
+                .matchParentSize()
+                // Cancels the rotation of the container, so the arrow always stays upright.
+                .graphicsLayer {
+                    rotationZ = -progress * SETTINGS_ICON_SPIN_DEGREES
+                    alpha = progress
+                }
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     navController: NavController,
     dataManager: DataManager,
+    // The exit is signalled by the app shell, because the shared back button lives above the
+    // NavHost; the entrance is owned here instead, see rowsVisible in the body.
+    rowsLeaving: Boolean,
+    // Set by the shell when this page is coming back from a child screen (changelog, colour picker,
+    // image picker): its rows then cascade in from the left, matching the page's own slide.
+    rowsEnterFromLeft: Boolean,
+    onExitRequested: () -> Unit,
     onPickBg: () -> Unit,
     onUpdateFound: (String, Int, Int) -> Unit
 ) {
@@ -1151,6 +1369,22 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val exportSuccessMsg = stringResource(R.string.export_success)
     val importSuccessMsg = stringResource(R.string.import_success)
+
+    // The entrance lives here rather than in the shell: the first composition is always hidden, so
+    // the cascade is guaranteed to play instead of the rows being drawn already in place.
+    var rowsVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { rowsVisible = true }
+    // ...and the shell only asks for the reverse run, from the shared button or from the system
+    // back key handled below. The pop is not held back: the cascade plays on top of the pop
+    // transition, so tapping back reacts immediately.
+    LaunchedEffect(rowsLeaving) { if (rowsLeaving) rowsVisible = false }
+    BackHandler {
+        if (navController.currentBackStackEntry?.lifecycle?.currentState ==
+                androidx.lifecycle.Lifecycle.State.RESUMED) {
+            onExitRequested()
+            navController.popBackStack()
+        }
+    }
     
     val themeMode by dataManager.themeMode.collectAsState(initial = 0)
     val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
@@ -1246,15 +1480,55 @@ fun SettingsScreen(
                                                     zos.closeEntry()
                                                     zipFonts[path] = entryName
                                                 }
+                                                // The display name lives in a ".name" sidecar next to
+                                                // the font, so it has to travel too: without it a restore
+                                                // can only show the internal file_<uuid> name, which
+                                                // reads as gibberish.
+                                                val nameFile = File(file.parentFile, file.name + ".name")
+                                                if (nameFile.exists()) {
+                                                    zos.putNextEntry(ZipEntry("$entryName.name"))
+                                                    zos.write(nameFile.readBytes())
+                                                    zos.closeEntry()
+                                                }
                                             } catch (_: Exception) {}
                                         }
                                     }
                                 }
                             }
                             
+                            // Fonts that are only sitting in the saved-fonts list (no card uses them)
+                            // travel as well, with the ".name" sidecar that holds their display name.
+                            backup.savedFonts?.forEach { savedFont ->
+                                val path = savedFont.path
+                                if (zipFonts.containsKey(path)) return@forEach   // a card already took it
+                                if (path.startsWith("fonts/")) return@forEach
+                                val file = File(path)
+                                if (!file.exists()) return@forEach
+                                val entryName = "fonts/${file.name}"
+                                try {
+                                    file.inputStream().use { input ->
+                                        zos.putNextEntry(ZipEntry(entryName))
+                                        input.copyTo(zos)
+                                        zos.closeEntry()
+                                    }
+                                    val nameFile = File(file.parentFile, file.name + ".name")
+                                    if (nameFile.exists()) {
+                                        zos.putNextEntry(ZipEntry("$entryName.name"))
+                                        zos.write(nameFile.readBytes())
+                                        zos.closeEntry()
+                                    }
+                                    zipFonts[path] = entryName
+                                } catch (_: Exception) {}
+                            }
+
                             val backupForZip = backup.copy(
                                 appBackgroundImage = zipAppBgName ?: backup.appBackgroundImage,
-                                events = backup.events.map { it.zipEntryUris(zipImages, zipFonts) }
+                                events = backup.events.map { it.zipEntryUris(zipImages, zipFonts) },
+                                // The saved-fonts list stores absolute paths as well, so they are
+                                // swapped for entry names exactly like the cards' fonts are.
+                                savedFonts = backup.savedFonts?.map { font ->
+                                    font.copy(path = zipFonts[font.path] ?: font.path)
+                                }
                             )
                             
                             zos.putNextEntry(ZipEntry("backup.json"))
@@ -1310,6 +1584,21 @@ fun SettingsScreen(
                                     }
                                 }
 
+                                // Writes the bytes of one "fonts/..." entry back into the app's own
+                                // directory, sidecar included, and returns where it landed.
+                                fun restoreFont(entryPath: String): String? {
+                                    val data = fontFiles[entryPath] ?: return null
+                                    val originalName = entryPath.substringAfterLast("/")
+                                    val file = File(fontsDir, originalName)
+                                    file.writeBytes(data)
+                                    // The display name lives in a ".name" sidecar next to the font;
+                                    // without it the editor shows the internal file_<uuid> name.
+                                    fontFiles["$entryPath.name"]?.let { nameBytes ->
+                                        File(fontsDir, "$originalName.name").writeBytes(nameBytes)
+                                    }
+                                    return file.absolutePath
+                                }
+
                                 val restoredEvents = backup.events.map { event ->
                                     // Pictures travel as zip entries, so they are written back into
                                     // the app's own directory and the card is pointed at the copies
@@ -1318,21 +1607,31 @@ fun SettingsScreen(
                                         file.writeBytes(imageFiles.getValue(entryName))
                                         Uri.fromFile(file).toString()
                                     }
-                                    var fontPath = restoredEvent.customFontPath
-                                    if (fontPath?.startsWith("fonts/") == true) {
-                                        fontFiles[fontPath]?.let { data ->
-                                            val originalName = fontPath.substringAfterLast("/")
-                                            val file = File(fontsDir, originalName)
-                                            file.writeBytes(data)
-                                            fontPath = file.absolutePath
-                                        }
-                                    }
+                                    // A card's font is an entry too; when the backup carries no bytes
+                                    // for it (an older backup) the path is kept as it is.
+                                    val fontPath = restoredEvent.customFontPath
+                                        ?.takeIf { it.startsWith("fonts/") }
+                                        ?.let { restoreFont(it) }
+                                        ?: restoredEvent.customFontPath
                                     restoredEvent.copy(customFontPath = fontPath)
                                 }
                                 
+                                // Fonts that only lived in the saved list come back too, pointed at the
+                                // restored copies. An entry the backup has no bytes for (it was written
+                                // by an older version) is dropped when its file is gone, instead of
+                                // coming back as a reference to a file that is not there.
+                                val restoredFonts = backup.savedFonts?.mapNotNull { font ->
+                                    if (font.path.startsWith("fonts/")) {
+                                        restoreFont(font.path)?.let { restored -> font.copy(path = restored) }
+                                    } else {
+                                        font.takeIf { saved -> File(saved.path).exists() }
+                                    }
+                                }
+
                                 dataManager.restoreAllData(backup.copy(
                                     events = restoredEvents,
-                                    appBackgroundImage = restoredAppBg
+                                    appBackgroundImage = restoredAppBg,
+                                    savedFonts = restoredFonts
                                 ))
                                 withContext(Dispatchers.Main) {
                                     Toast.makeText(context, importSuccessMsg, Toast.LENGTH_SHORT).show()
@@ -1377,13 +1676,17 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .statusBarsPadding(),
+                    .statusBarsPadding()
+                    // Fixed content height, see TOP_BAR_CONTENT_HEIGHT. With CenterVertically the
+                    // title pill and the button slot share one centre line instead of being top
+                    // aligned, which is what made the title sit low against the button.
+                    .height(TOP_BAR_CONTENT_HEIGHT),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(TOP_BAR_TITLE_CORNER))
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1391,28 +1694,16 @@ fun SettingsScreen(
                         text = stringResource(R.string.settings),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontSize = 20.sp
+                        fontSize = TOP_BAR_TITLE_FONT_SIZE,
+                        // Keeps the pill growing with the glyphs; without this it would be clipped
+                        // into body-large's fixed 24sp line height.
+                        lineHeight = TOP_BAR_TITLE_LINE_HEIGHT
                     )
                 }
-                
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .clickable {
-                            if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                                navController.popBackStack()
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+
+                // Placeholder for the shared settings/back button, which the app shell pins to
+                // this exact corner so it can morph in place instead of sliding with the page.
+                Spacer(modifier = Modifier.size(48.dp))
             }
         }
     ) { innerPadding ->
@@ -1433,7 +1724,9 @@ fun SettingsScreen(
                 Text(
                     text = stringResource(R.string.appearance),
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                    modifier = Modifier
+                        .settingsSlideIn(0, rowsVisible, rowsEnterFromLeft)
+                        .padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
                 )
 
                 // Theme Mode Card
@@ -1446,6 +1739,7 @@ fun SettingsScreen(
 
                 Row(
                     modifier = Modifier
+                        .settingsSlideIn(1, rowsVisible, rowsEnterFromLeft)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
                         .padding(16.dp),
@@ -1488,6 +1782,7 @@ fun SettingsScreen(
                 // Theme Color Card
                 Column(
                     modifier = Modifier
+                        .settingsSlideIn(2, rowsVisible, rowsEnterFromLeft)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
                         .padding(16.dp)
@@ -1571,6 +1866,7 @@ fun SettingsScreen(
                 // Global Background Image Card
                 Column(
                     modifier = Modifier
+                        .settingsSlideIn(3, rowsVisible, rowsEnterFromLeft)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
                         .padding(16.dp)
@@ -1626,12 +1922,15 @@ fun SettingsScreen(
                 Text(
                     text = stringResource(R.string.notifications),
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
+                    modifier = Modifier
+                        .settingsSlideIn(4, rowsVisible, rowsEnterFromLeft)
+                        .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
                 )
 
 
                 Row(
                     modifier = Modifier
+                        .settingsSlideIn(5, rowsVisible, rowsEnterFromLeft)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
                         .padding(16.dp),
@@ -1703,11 +2002,14 @@ fun SettingsScreen(
                 Text(
                     text = stringResource(R.string.backup_restore),
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
+                    modifier = Modifier
+                        .settingsSlideIn(6, rowsVisible, rowsEnterFromLeft)
+                        .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
                 )
 
                 Row(
                     modifier = Modifier
+                        .settingsSlideIn(7, rowsVisible, rowsEnterFromLeft)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
                         .padding(12.dp),
@@ -1756,11 +2058,14 @@ fun SettingsScreen(
                 Text(
                     text = stringResource(R.string.about),
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
+                    modifier = Modifier
+                        .settingsSlideIn(8, rowsVisible, rowsEnterFromLeft)
+                        .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
                 )
 
                 Column(
                     modifier = Modifier
+                        .settingsSlideIn(9, rowsVisible, rowsEnterFromLeft)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
                         .padding(24.dp)
@@ -1939,7 +2244,7 @@ private suspend fun extractColorFromUri(context: Context, uri: Uri): String? {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Suppress("UNUSED_PARAMETER")
-fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
+fun ChangelogScreen(dataManager: DataManager) {
     val context = LocalContext.current
     val noChangelogMsg = stringResource(R.string.no_changelog)
     val aiDisclaimer = stringResource(R.string.changelog_ai_disclaimer)
@@ -1979,13 +2284,17 @@ fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    // Same fixed content height as the settings screen, so this title and its back
+                    // button share one centre line with the rest of the app instead of depending on
+                    // how tall the title pill happens to be.
+                    .height(TOP_BAR_CONTENT_HEIGHT),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(TOP_BAR_TITLE_CORNER))
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1993,28 +2302,15 @@ fun ChangelogScreen(navController: NavController, dataManager: DataManager) {
                         text = stringResource(R.string.changelog_full_title),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontSize = 20.sp
+                        fontSize = TOP_BAR_TITLE_FONT_SIZE,
+                        lineHeight = TOP_BAR_TITLE_LINE_HEIGHT
                     )
                 }
-                
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .clickable {
-                            if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                                navController.popBackStack()
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+
+                // This page is only ever opened from the settings page, and the page hands the shared
+                // button over to it: the arrow turns into the gear and keeps this corner occupied, so
+                // only the 48dp slot is reserved here.
+                Spacer(modifier = Modifier.size(48.dp))
             }
 
             Box(
@@ -2371,13 +2667,17 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .statusBarsPadding(),
+                    .statusBarsPadding()
+                    // Same fixed content height as the settings screen, so this title and its back
+                    // button share one centre line with the rest of the app instead of depending on
+                    // how tall the title pill happens to be.
+                    .height(TOP_BAR_CONTENT_HEIGHT),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(TOP_BAR_TITLE_CORNER))
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -2385,14 +2685,15 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                         text = if (eventId == null) stringResource(R.string.create_card) else stringResource(R.string.edit_event),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontSize = 20.sp
+                        fontSize = TOP_BAR_TITLE_FONT_SIZE,
+                        lineHeight = TOP_BAR_TITLE_LINE_HEIGHT
                     )
                 }
-                
+
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(TOP_BAR_ACTION_CORNER))
                         .background(MaterialTheme.colorScheme.primaryContainer)
                         .clickable {
                             if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {

@@ -141,7 +141,15 @@ data class BackupData(
     val appBackgroundImage: String? = null,
     val appBackgroundBrightness: Float = 0.5f,
     val appBackgroundThemeColor: String? = null,
-    val savedFonts: List<SavedFont> = emptyList()
+    // Everything below was added after the first backups were written. They are nullable on purpose:
+    // a backup from an older version simply does not contain them, and then the restore must leave
+    // the values currently on the device alone instead of resetting them to these defaults.
+    val savedFonts: List<SavedFont>? = null,
+    val savedColors: List<String>? = null,
+    val sortAscending: Boolean? = null,
+    val sortByCreation: Boolean? = null,
+    val isGridView: Boolean? = null,
+    val widgetConfig: Map<String, String>? = null
 )
 
 class DataManager(private val context: Context) {
@@ -358,7 +366,26 @@ class DataManager(private val context: Context) {
         val bgImage = preferences[appBackgroundImageKey]
         val bgBrightness = preferences[appBackgroundBrightnessKey] ?: 0.5f
         val bgThemeColor = preferences[appBackgroundThemeColorKey]
-        return BackupData(events, mode, color, notify, bgImage, bgBrightness, bgThemeColor)
+        // The saved palettes and fonts and the way the home screen is sorted and laid out are just as
+        // much part of the setup as the cards are, so they are exported too.
+        val savedFonts = try { Json.decodeFromString<List<SavedFont>>(preferences[savedFontsKey] ?: "[]") } catch(_: Exception) { emptyList() }
+        val savedColors = try { Json.decodeFromString<List<String>>(preferences[savedColorsKey] ?: "[]") } catch(_: Exception) { emptyList() }
+        val widgetConfig = try { Json.decodeFromString<Map<String, String>>(preferences[widgetConfigKey] ?: "{}") } catch(_: Exception) { emptyMap() }
+        return BackupData(
+            events = events,
+            themeMode = mode,
+            themeColor = color,
+            notificationsEnabled = notify,
+            appBackgroundImage = bgImage,
+            appBackgroundBrightness = bgBrightness,
+            appBackgroundThemeColor = bgThemeColor,
+            savedFonts = savedFonts,
+            savedColors = savedColors,
+            sortAscending = preferences[sortAscendingKey] ?: false,
+            sortByCreation = preferences[sortByCreationKey] ?: false,
+            isGridView = preferences[isGridViewKey] ?: false,
+            widgetConfig = widgetConfig
+        )
     }
 
     suspend fun restoreAllData(backup: BackupData) {
@@ -376,6 +403,15 @@ class DataManager(private val context: Context) {
             
             if (backup.appBackgroundThemeColor == null) preferences.remove(appBackgroundThemeColorKey)
             else preferences[appBackgroundThemeColorKey] = backup.appBackgroundThemeColor
+
+            // Only the values the backup actually carries are written: the nullable ones are missing
+            // from backups written before they existed, and those must not reset the current setup.
+            backup.savedFonts?.let { preferences[savedFontsKey] = Json.encodeToString(it) }
+            backup.savedColors?.let { preferences[savedColorsKey] = Json.encodeToString(it) }
+            backup.sortAscending?.let { preferences[sortAscendingKey] = it }
+            backup.sortByCreation?.let { preferences[sortByCreationKey] = it }
+            backup.isGridView?.let { preferences[isGridViewKey] = it }
+            backup.widgetConfig?.let { preferences[widgetConfigKey] = Json.encodeToString(it) }
         }
     }
 
