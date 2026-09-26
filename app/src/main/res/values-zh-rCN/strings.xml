@@ -55,7 +55,7 @@
     <string name="rgb">RGB</string>
     <string name="custom_color">自定义颜色</string>
     <string name="preset_color">预设颜色</string>
-    <string name="version_text">版本v1.6.2</string>
+    <string name="version_text">版本v1.6.3</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>

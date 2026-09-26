@@ -118,9 +118,6 @@ fun ImagePickerScreen(
         else -> isSystemInDarkTheme()
     }
     
-    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
-    val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
-
     var hasPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED)
     }
@@ -260,26 +257,12 @@ fun ImagePickerScreen(
     val density = LocalDensity.current
 
     Scaffold(
-        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
+        // Transparent so the app background painted once by the shell behind the NavHost shows
+        // through. A second copy drawn in here would slide with the page and double up with it
+        // during a transition.
+        containerColor = Color.Transparent,
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            if (appBgImage != null) {
-                AsyncImage(
-                    model = appBgImage,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            if (isDark) Color.Black.copy(alpha = appBgBrightness)
-                            else Color.White.copy(alpha = appBgBrightness)
-                        )
-                )
-            }
-
             if (images.isEmpty() && hasPermission) {
                 Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                     Text(text = "No images found", color = contentColor.copy(alpha = 0.5f))

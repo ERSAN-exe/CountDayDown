@@ -699,8 +699,6 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
         searchQuery = ""
     }
     
-    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
-
     val events = remember(rawEvents, sortAscending, sortByCreationDate, currentTick, searchQuery) {
         val ordered = orderHomeEvents(rawEvents, sortAscending, sortByCreationDate, currentTick)
         if (searchQuery.isBlank()) {
@@ -818,7 +816,10 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
     val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
 
     Scaffold(
-        containerColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background,
+        // The app background (the theme colour plus the optional picture and its mask) is painted
+        // once by the shell behind the NavHost, so every screen only has to stay transparent for it
+        // to show through.
+        containerColor = Color.Transparent,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate("add_edit") },
@@ -1670,7 +1671,8 @@ fun SettingsScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        // Transparent so the app background painted by the shell behind the NavHost shows through.
+        containerColor = Color.Transparent,
         topBar = {
             Row(
                 modifier = Modifier
@@ -2272,7 +2274,8 @@ fun ChangelogScreen(dataManager: DataManager) {
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        // Transparent so the app background painted by the shell behind the NavHost shows through.
+        containerColor = Color.Transparent,
         topBar = {}
     ) { innerPadding ->
         Column(
@@ -2661,7 +2664,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        // Transparent so the app background painted by the shell behind the NavHost shows through.
+        containerColor = Color.Transparent,
         topBar = {
             Row(
                 modifier = Modifier

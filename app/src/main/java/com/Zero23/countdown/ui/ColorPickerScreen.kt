@@ -52,9 +52,6 @@ fun ColorPickerScreen(
 ) {
     val scope = rememberCoroutineScope()
 
-    val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
-    val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
-
     // Load initial color or default to theme primary
     val defaultColor = String.format("#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.toArgb()))
     val startColor = if (initialColorHex.isNullOrEmpty()) defaultColor else initialColorHex
@@ -119,35 +116,19 @@ fun ColorPickerScreen(
         "#88DD44", "#FFCCAA", "#99CCFF", "#FFAACC", "#99EEDD"
     )
 
-    val bgColor = if (appBgImage != null) Color.Transparent else MaterialTheme.colorScheme.background
-    
     // Use stable theme colors instead of dynamic preview accents
     val pickerAccent = MaterialTheme.colorScheme.primaryContainer
     val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     val fieldBg = MaterialTheme.colorScheme.surface
     val onFieldColor = MaterialTheme.colorScheme.onSurface
-    
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (appBgImage != null) {
-            coil3.compose.AsyncImage(
-                model = appBgImage,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        if (isDark) Color.Black.copy(alpha = appBgBrightness)
-                        else Color.White.copy(alpha = appBgBrightness)
-                    )
-            )
-        }
 
+    Box(modifier = Modifier.fillMaxSize()) {
+        // The Scaffold is transparent, so what this screen shows is the app background painted once
+        // by the shell behind the NavHost. Drawing a second copy in here would slide with the page
+        // and double up with that one during a transition.
         Scaffold(
-            containerColor = bgColor,
+            containerColor = Color.Transparent,
             topBar = {
                 Row(
                     modifier = Modifier

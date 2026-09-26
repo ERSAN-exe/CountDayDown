@@ -91,7 +91,9 @@ class WidgetConfigActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    if (isDarkTheme) Color.Black.copy(alpha = appBgBrightness)
+                                    // Same soft black as the app's own background layer, so the two
+                                    // match when this screen follows the app's background picture.
+                                    if (isDarkTheme) Color(0xFF121212).copy(alpha = appBgBrightness)
                                     else Color.White.copy(alpha = appBgBrightness)
                                 )
                         )
