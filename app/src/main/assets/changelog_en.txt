@@ -9,7 +9,7 @@ Previous Changelogs
 -----------------------------
 v1.6.2 Changelog
 September 26, 2026
-=============================
+
 Added page switching animations.
 Adjusted the title bar.
 Readjusted the backup logic.
@@ -17,7 +17,7 @@ Readjusted the backup logic.
 -----------------------------
 v1.6.1 Changelog
 September 25, 2026
-=============================
+
 Fixed an issue where transition animations were abnormal when using the swipe-to-back gesture.
 Fixed an issue where the color palette did not track touch sliding.
 Fixed an issue where the app did not automatically prompt for installation after downloading an update.
