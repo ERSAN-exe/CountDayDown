@@ -1,0 +1,229 @@
+=============================
+Änderungsprotokoll v1.6.4
+3. Oktober 2026
+=============================
+Übergangsanimationen für die Bearbeitungsseite hinzugefügt.
+Deutsch, Französisch und Russisch hinzugefügt.
+
+-----------------------------
+Frühere Änderungsprotokolle
+-----------------------------
+Änderungsprotokoll v1.6.3
+26. September 2026
+
+Ein Problem behoben, bei dem der benutzerdefinierte Hintergrund nicht auf allen Bildschirmen angezeigt wurde.
+
+-----------------------------
+Frühere Änderungsprotokolle
+-----------------------------
+Änderungsprotokoll v1.6.2
+26. September 2026
+
+Animationen für den Seitenwechsel hinzugefügt.
+Die Titelleiste angepasst.
+Die Sicherungslogik überarbeitet.
+
+-----------------------------
+Änderungsprotokoll v1.6.1
+25. September 2026
+
+Ein Problem behoben, bei dem die Übergangsanimationen bei der Zurück-Wischgeste fehlerhaft waren.
+Ein Problem behoben, bei dem die Farbpalette dem Fingerziehen nicht folgte.
+Ein Problem behoben, bei dem die App nach dem Herunterladen eines Updates nicht automatisch zur Installation aufforderte.
+Ein Problem mit der Überlagerung am unteren Rand des Farbwählers behoben.
+Ein Problem behoben, bei dem im Suchfeld eine Lücke in der Animation auftrat.
+Ein Problem behoben, bei dem eine Countdown-Karte mit einem einzelnen Bild nach erneutem Anwenden einer exportierten Konfiguration als schwarze Karte angezeigt wurde.
+
+-----------------------------
+Frühere Änderungsprotokolle
+-----------------------------
+Änderungsprotokoll v1.6
+25. September 2026
+
+Anzeige mehrerer Bilder für Countdown-Karten mit gestapeltem Layout hinzugefügt.
+Funktion zur Aufnahme mit der Kamera hinzugefügt.
+Suchfunktion hinzugefügt.
+Die Sortierregel der Startseite geändert, sodass Countdown-Tage oben stehen.
+Die Bestätigungsschaltfläche der Bildauswahl korrigiert, die anklickbar war, obwohl kein Bild ausgewählt war.
+Ein Problem behoben, bei dem das Ändern der Farbe nach der Bildauswahl dazu führte, dass das Bild verschwand.
+
+-----------------------------
+Änderungsprotokoll v1.5
+12. September 2026
+
+Funktion zur Überprüfung auf Updates hinzugefügt.
+Das App-Symbol neu gezeichnet.
+Die Textgröße in den Schaltflächen der Einstellungsseite angepasst.
+Die Änderungsprotokolle für andere Sprachen synchronisiert.
+
+-----------------------------
+Änderungsprotokoll v1.4.3
+7. August 2026
+
+Ein Problem behoben, bei dem das Tippen auf die Bildschaltfläche auf der Zuschneideseite der Bildauswahl in den Einstellungen nicht zur Auswahlseite zurückführte.
+
+-----------------------------
+Änderungsprotokoll v1.4.2
+25. Juli 2026
+
+Möglichkeit hinzugefügt, die Countdown-Karte als Bild zu exportieren.
+Die Schleifen- und Erinnerungsanzeigen sind jetzt zu einem einzigen Symbol zusammengefasst und in der unteren rechten Ecke platziert, damit sich die Kartengröße nicht ändert.
+Die Sortierpfeile auf der Startseite werden jetzt als Text „aufsteigend“ und „absteigend“ angezeigt.
+Der Hinweis entfernt, der beim Synchronisieren der Systemzeit auf der Startseite angezeigt wurde.
+Ein Problem behoben, bei dem die Form des Dialogs mit Welleneffekt beim Klicken auf einige Schaltflächen falsch war.
+Ein Problem behoben, bei dem die Schaltfläche zum Erstellen auf der Startseite im Dunkelmodus zu hell war.
+Ein Problem behoben, bei dem die untere Navigationsleiste auf der Bearbeitungsseite der Countdown-Karte im Dunkelmodus zu hell war.
+Ein Problem behoben, bei dem sich die Designfarbe der Seite bei der Farbauswahl auf der Farbauswahlseite änderte.
+Ein Problem behoben, bei dem sich die Kartenfarben zusammen mit der Designfarbe änderten.
+Ein Problem behoben, bei dem der Text in den Optionsfeldern auf der Bearbeitungsseite kopiert werden konnte.
+
+-----------------------------
+Änderungsprotokoll v1.4.1
+12. Juli 2026
+
+Schaltflächen von der Countdown-Karte entfernt und durch Bearbeitung per langem Drücken ersetzt.
+Die Importfunktion verschoben und in den Einstellungen verfügbar gemacht.
+Der Regler für die Überlagerungsintensität und die Karte zur Bildauswahl sind nach dem Hinzufügen von Bildern jetzt kombiniert.
+Die Position der Textfarbauswahl auf der Bearbeitungsseite auf die ursprüngliche Position der Kartenfarbe zurückgesetzt.
+Ein Problem behoben, bei dem die Designfarbe zu hell war.
+Ein Problem behoben, bei dem die Farbe der Umschaltfläche auf der Startseite im Dunkelmodus zu dunkel war.
+Ein Problem behoben, bei dem die Farbe des Benachrichtigungsschalters im Dunkelmodus zu hell war.
+Ein Problem behoben, bei dem die Farbauswahlseite im Dunkelmodus nicht korrekt umschaltete.
+
+-----------------------------
+Änderungsprotokoll v1.4
+19. Juni 2026
+
+Eine neue Bildauswahlseite hinzugefügt.
+Eine neue Farbauswahlseite hinzugefügt.
+Hinzugefügte benutzerdefinierte Schriftarten können jetzt gespeichert werden.
+Dateierweiterungen werden beim Hinzufügen benutzerdefinierter Schriftarten nicht mehr angezeigt.
+Nach dem Hinzufügen von Bildern wird jetzt eine separate Option zum Ändern der Textfarbe angezeigt.
+Ein Problem behoben, bei dem die Standardfarbe nach dem Hinzufügen von Bildern nicht als Weiß angezeigt wurde.
+Ein Problem behoben, bei dem Kartenfarben bei der Auswahl vergangener Daten automatisch durch Rot ersetzt wurden.
+
+-----------------------------
+Änderungsprotokoll v1.3
+13. Juni 2026
+
+Möglichkeit hinzugefügt, bestimmte Wochentage auszuschließen.
+Erinnerungstextfenster sind jetzt standardmäßig eingeklappt, wenn keine Erinnerung festgelegt ist.
+Die Bildauswahlseite geändert.
+Der Standardname beim Exportieren von Konfigurationen geändert.
+Ein Problem behoben, bei dem benutzerdefinierte Hintergrundbilder beim Exportieren von Konfigurationen nicht exportiert wurden.
+Ein Problem behoben, bei dem die Daten auf der Vorschaueseite nicht mit den Karten der Startseite synchronisiert wurden, wenn der Schleifen-Countdown aktiviert war.
+Ein Problem behoben, bei dem die Bestätigungsschaltfläche auf der Farbseite auf kleinen Geräten nicht angeklickt werden konnte.
+
+-----------------------------
+Änderungsprotokoll v1.2.2
+13. Juni 2026
+
+Die Anzeige der Feedback-E-Mail von der Seite „Über“ entfernt.
+Die Animation der Seite zum Erstellen von Countdown-Karten geändert.
+Das Auswahlfenster für Startbildschirm-Widgets geändert.
+Beim Versuch, eine Countdown-Karte ohne Namen zu erstellen, erscheint jetzt ein Hinweis und die Navigation erfolgt automatisch.
+Der Zuschneiderahmen ist jetzt auf den Bildbereich beschränkt, um schwarze Ränder in Bildern zu beheben.
+Ein Problem behoben, bei dem Widgets die Einstellungen für die Hintergrundhelligkeit nicht korrekt synchronisierten.
+
+-----------------------------
+Änderungsprotokoll v1.2.1
+8. Juni 2026
+
+Einen GitHub-Projektlink zur Einstellungsseite hinzugefügt.
+Ein Symbol zur Seite „Über“ hinzugefügt.
+Bearbeitungsseiten können jetzt durch Wischen nach links und rechts gewechselt werden.
+Ein Problem behoben, bei dem die Farbaufforderung beim Folgen der Hintergrundfarbe weiterhin benutzerdefinierte Farben anzeigte.
+Ein Problem behoben, bei dem importierte Namen benutzerdefinierter Schriftarten falsch angezeigt wurden.
+Ein Problem behoben, bei dem das Zuschneiden von Bildern auf Geräten mit unterschiedlichem Anzeigeverhältnis fehlerhaft war.
+Lokalisierungsübersetzungen aktualisiert und einige Texte angepasst.
+
+-----------------------------
+Änderungsprotokoll v1.2
+8. Juni 2026
+
+Animationen für den Seitenwechsel hinzugefügt.
+Animationen für den Kartenwechsel auf der Startseite hinzugefügt.
+Animationen für den Wechsel der Bearbeitungsseite hinzugefügt.
+Ein Problem behoben, bei dem die Titelleiste auf der Einstellungsseite gescrollt werden konnte.
+Einen Absturz behoben, der durch wiederholtes Tippen auf die Zurück-Schaltfläche und die Einstellungsschaltfläche verursacht wurde.
+Ein Problem behoben, bei dem voreingestellte Farben in den zuletzt verwendeten Farben auftauchten.
+Abnormales Flackern beim Seitenwechsel behoben.
+App-Größe optimiert.
+
+-----------------------------
+Änderungsprotokoll v1.1
+7. Juni 2026
+
+Das Layout der Oberfläche zum Erstellen von Countdown-Karten geändert.
+Möglichkeit hinzugefügt, benutzerdefinierte Schriftarten zu importieren.
+Möglichkeit hinzugefügt, den App-Hintergrund anzupassen.
+Verwendete Farben werden jetzt gespeichert und können durch langes Drücken gelöscht werden.
+Die Designfarben von Bildern können jetzt als Designfarben der App festgelegt werden.
+Hinweise zur Benachrichtigungsberechtigung behoben, wenn die Berechtigung nicht erteilt oder manuell deaktiviert wurde.
+
+-----------------------------
+Änderungsprotokoll v1.0
+31. Mai 2026
+
+Das gesamte App-Layout neu gestaltet.
+Die Startseite unterstützt jetzt die Anzeige einer kleinen Countdown-Karte und eine Umschaltfläche wurde hinzugefügt.
+Eine neue Oberfläche zum Zuschneiden von Bildern hinzugefügt.
+Vorschaubilder für Startbildschirm-Widgets hinzugefügt.
+Ein Problem behoben, bei dem Designfarben nicht korrekt gewechselt werden konnten.
+Ein Problem behoben, bei dem Countdown-Karten falsch sortiert wurden.
+Probleme mit dem Lokalisierungstext behoben.
+
+-----------------------------
+Änderungsprotokoll v0.5
+16. Mai 2026
+
+Die Seite zum Erstellen von Countdowns neu gestaltet, Vorschauunterstützung hinzugefügt und das Layout geändert.
+Die Countdown-Karte kann jetzt Bilder als Hintergrund verwenden.
+Beim Exportieren von Konfigurationsdateien werden jetzt auch benutzerdefinierte Bilder exportiert.
+Text korrigiert, der nicht ordnungsgemäß lokalisiert war.
+Das Pop-up-Fenster für das Update-Protokoll in eine separate Seite geändert.
+
+-----------------------------
+Änderungsprotokoll v0.4
+15. Mai 2026
+
+Das App-Symbol geändert.
+Widgets der Größe 4×2 hinzugefügt.
+Die Anzeige der Zeitzone von der Einstellungsseite entfernt.
+Funktionen für Datenimport und -export hinzugefügt.
+Text korrigiert, der nicht ordnungsgemäß lokalisiert war.
+
+-----------------------------
+Änderungsprotokoll v0.3
+14. Mai 2026
+
+Startbildschirm-Widgets der Größe 2×2 hinzugefügt.
+Sortieroptionen auf der Startseite hinzugefügt.
+Stile und Anzeigemethoden der Countdown-Karten geändert.
+Die Anzeige der Zeitzone auf der Einstellungsseite wieder hinzugefügt.
+Feedback-E-Mail hinzugefügt.
+Möglichkeit hinzugefügt, die Designfarben der App zu ändern.
+Unterstützung für traditionelles Chinesisch und Koreanisch hinzugefügt.
+
+-----------------------------
+Änderungsprotokoll v0.2
+12. Mai 2026
+
+Funktion für wiederkehrende Countdown-Tage hinzugefügt.
+Eine Einstellungsseite als Ersatz für die ursprüngliche Seite „Über“ hinzugefügt.
+Sortierung nach verbleibender Ereigniszeit hinzugefügt.
+Umschaltung in den Dunkelmodus hinzugefügt.
+Benachrichtigungsschalter hinzugefügt.
+Die Seite zum Erstellen von Countdowns hinzugefügt und das Inhaltslayout geändert.
+Das Anzeigeformat des Countdowns passt sich jetzt automatisch an die verbleibende Zeit an.
+Die Anzeige der Zeitzone entfernt; die Zeit wird jetzt alle fünf Minuten automatisch synchronisiert.
+Unterstützung für mehrere Sprachen hinzugefügt: Englisch und Japanisch.
+
+-----------------------------
+Änderungsprotokoll v0.1
+10. Mai 2026
+
+Positive Tageszählung und Countdown-Tage unterstützt.
+Benutzerdefinierte Countdown-Farben.
+Benachrichtigungserinnerungen.
+Manuelle Zeitsynchronisierung.

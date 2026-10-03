@@ -40,3 +40,8 @@ Thumbs.db
 
 .externalNativeBuild
 .cxx/
+/app/release/baselineProfiles/1/app-release.dm
+/app/release/baselineProfiles/0/app-release.dm
+/app/src/test/java/com/Zero23/countdown/data/BackupImagesTest.kt
+/app/release/mapping.txt
+/app/release/output-metadata.json

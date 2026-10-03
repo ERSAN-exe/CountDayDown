@@ -1,5 +1,6 @@
 package com.Zero23.countdown
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import coil3.compose.AsyncImage
 
@@ -17,7 +18,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -94,9 +97,13 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.util.lerp
 import kotlin.math.absoluteValue
@@ -105,6 +112,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.EnterTransition
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.palette.graphics.Palette
@@ -354,6 +362,12 @@ class MainActivity : ComponentActivity() {
                 // the settings screen can already read it on the frame it enters: its rows then
                 // cascade in from the left, mirroring the page that slides in from the left.
                 var settingsRowsEnterFromLeft by remember { mutableStateOf(false) }
+                // Where the page container and the create button sit on screen, both measured in
+                // window coordinates. Tapping the create button unfolds the add/edit page out of
+                // the button itself, which needs the two rectangles to work out the scale and the
+                // point to grow from - see createButtonOrigin().
+                var navContainerBounds by remember { mutableStateOf<Rect?>(null) }
+                var createButtonBounds by remember { mutableStateOf<Rect?>(null) }
 
                                 // Global Crop State
                 var globalCropOriginalUri by remember { mutableStateOf<Uri?>(null) }
@@ -362,6 +376,13 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
+                        // This box is what fills the window and hosts the NavHost's destinations,
+                        // so it doubles as the coordinate space the create button is compared
+                        // against. Re-measured on every layout, rotation included.
+                        .onGloballyPositioned { coordinates ->
+                            val bounds = coordinates.boundsInWindow()
+                            if (bounds != navContainerBounds) navContainerBounds = bounds
+                        }
                 ) {
                     if (appBgImage != null) {
                         AsyncImage(
@@ -436,8 +457,44 @@ class MainActivity : ComponentActivity() {
                             ) + fadeOut(animationSpec = tween(450))
                         }
                     ) {
-                        composable("home") {
-                            CountdownApp(navController, dataManager)
+                        composable(
+                            route = "home",
+                            // Leaving for the add/edit page is the one push that never slides: the
+                            // form opens out of the create button (or, when a card was tapped,
+                            // fades in from the middle of the screen), so home only dissolves
+                            // behind it and is still there for the form to shrink back into.
+                            // Every other push - the settings page and its children - keeps the
+                            // navigator's own slide, which the row cascade over there is tuned to.
+                            exitTransition = {
+                                if (targetState.bareRoute() == "add_edit") {
+                                    fadeOut(animationSpec = tween(addEditTransitionMs(targetState)))
+                                } else {
+                                    slideOutOfContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                                        animationSpec = tween(NAV_TRANSITION_MS)
+                                    ) + fadeOut(animationSpec = tween(NAV_TRANSITION_MS))
+                                }
+                            },
+                            popEnterTransition = {
+                                if (initialState.bareRoute() == "add_edit") {
+                                    fadeIn(animationSpec = tween(addEditTransitionMs(initialState)))
+                                } else {
+                                    slideIntoContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                                        animationSpec = tween(NAV_TRANSITION_MS)
+                                    ) + fadeIn(animationSpec = tween(NAV_TRANSITION_MS))
+                                }
+                            }
+                        ) {
+                            CountdownApp(
+                                navController = navController,
+                                dataManager = dataManager,
+                                // The create button reports where it landed, so the page it opens
+                                // knows where to unfold from.
+                                onCreateButtonPositioned = { bounds ->
+                                    if (bounds != createButtonBounds) createButtonBounds = bounds
+                                }
+                            )
                         }
                         composable("settings") {
                             val result = navController.currentBackStackEntry
@@ -498,26 +555,56 @@ class MainActivity : ComponentActivity() {
                                 nullable = true
                                 defaultValue = null
                             }),
+                            // One destination, two stories. Tapped from the create button the form
+                            // grows out of that button until it covers the page; tapped on a card
+                            // it fades in from the middle of the screen instead. Which of the two
+                            // applies is read from the argument the caller passed - see
+                            // isEditingExistingEvent() - and home dissolves behind either of them
+                            // rather than sliding, so the entrance stays the whole story.
                             enterTransition = {
-                                slideIntoContainer(
-                                    towards = AnimatedContentTransitionScope.SlideDirection.Up,
-                                    animationSpec = tween(450)
-                                ) + fadeIn(animationSpec = tween(450))
+                                if (targetState.isEditingExistingEvent()) {
+                                    fadeIn(animationSpec = tween(ADD_EDIT_FADE_MS)) + scaleIn(
+                                        animationSpec = tween(ADD_EDIT_FADE_MS),
+                                        initialScale = CARD_EDIT_SCALE,
+                                        transformOrigin = TransformOrigin.Center
+                                    )
+                                } else {
+                                    val origin = createButtonOrigin(navContainerBounds, createButtonBounds)
+                                    fadeIn(animationSpec = tween(ADD_EDIT_FADE_MS)) + scaleIn(
+                                        animationSpec = tween(ADD_EDIT_EXPAND_MS, easing = FastOutSlowInEasing),
+                                        initialScale = origin.scale,
+                                        transformOrigin = TransformOrigin(origin.x, origin.y)
+                                    )
+                                }
                             },
+                            // Opening a child of the form - the colour picker or the image picker -
+                            // keeps the slide it always had.
                             exitTransition = {
                                 slideOutOfContainer(
                                     towards = AnimatedContentTransitionScope.SlideDirection.Down,
-                                    animationSpec = tween(450)
-                                ) + fadeOut(animationSpec = tween(450))
+                                    animationSpec = tween(NAV_TRANSITION_MS)
+                                ) + fadeOut(animationSpec = tween(NAV_TRANSITION_MS))
                             },
                             popEnterTransition = {
                                 EnterTransition.None
                             },
+                            // Going back plays the entrance in reverse: the form shrinks into the
+                            // create button it came out of, or back into the middle of the screen.
                             popExitTransition = {
-                                slideOutOfContainer(
-                                    towards = AnimatedContentTransitionScope.SlideDirection.Down,
-                                    animationSpec = tween(450)
-                                ) + fadeOut(animationSpec = tween(450))
+                                if (initialState.isEditingExistingEvent()) {
+                                    fadeOut(animationSpec = tween(ADD_EDIT_FADE_MS)) + scaleOut(
+                                        animationSpec = tween(ADD_EDIT_FADE_MS),
+                                        targetScale = CARD_EDIT_SCALE,
+                                        transformOrigin = TransformOrigin.Center
+                                    )
+                                } else {
+                                    val origin = createButtonOrigin(navContainerBounds, createButtonBounds)
+                                    fadeOut(animationSpec = tween(ADD_EDIT_FADE_MS)) + scaleOut(
+                                        animationSpec = tween(ADD_EDIT_EXPAND_MS, easing = FastOutSlowInEasing),
+                                        targetScale = origin.scale,
+                                        transformOrigin = TransformOrigin(origin.x, origin.y)
+                                    )
+                                }
                             }
                         ) { backStackEntry ->
                             val eventId = backStackEntry.arguments?.getString("eventId")
@@ -540,30 +627,36 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // The settings / back button is pinned here, above the NavHost, so it is
-                    // composed exactly once for home, the settings page and the child screens that
-                    // settings opens, and morphs in place while the pages slide underneath it. Every
-                    // one of those screens keeps a matching 48dp slot in this corner, so nothing
-                    // shifts: same 48dp, 12dp radius, 16dp from the right edge and
-                    // statusBarsPadding() + 8dp from the top as before.
+                    // composed exactly once for home, the settings page, the add/edit form and the
+                    // child screens that settings opens, and morphs in place while the pages move
+                    // underneath it. Every one of those screens keeps a matching 48dp slot in this
+                    // corner, so nothing shifts: same 48dp, 12dp radius, 16dp from the right edge
+                    // and statusBarsPadding() + 8dp from the top as before.
                     val onSettingsRoute = currentRoute == "settings"
+                    // The add/edit form keeps a slot in this corner too, but as the arrow back to
+                    // home: its own top bar leaves the spot empty so the gear that was sitting
+                    // there spins into that arrow instead of being replaced by a second, static one.
+                    val onAddEditRoute = currentRoute == "add_edit"
                     val onChildRoute = currentRoute == "changelog" || currentRoute == "color_picker" ||
                         currentRoute == "image_picker"
                     // Children opened from the add/edit form keep their own back arrow: there the
                     // button is not standing in for the settings page and walks straight back to
                     // the form instead.
                     val childFromSettings = onChildRoute && callerRoute == "settings"
-                    val navButtonGoesBack = onSettingsRoute || childFromSettings
-                    // 0 = gear, 1 = arrow. Only the settings page shows the arrow; the gear always
-                    // means "go to the settings page", which on a child screen is also going back.
+                    val navButtonGoesBack = onSettingsRoute || childFromSettings || onAddEditRoute
+                    // 0 = gear, 1 = arrow. The settings page and the add/edit form show the arrow;
+                    // the gear always means "go to the settings page", which on a child screen - and
+                    // on the form - is also simply the way back.
                     var navMorphTarget by remember { mutableFloatStateOf(0f) }
                     var navButtonLocked by remember { mutableStateOf(false) }
                     LaunchedEffect(currentRoute) {
-                        navMorphTarget = if (onSettingsRoute) 1f else 0f
+                        navMorphTarget = if (onSettingsRoute || onAddEditRoute) 1f else 0f
                         delay(NAV_TRANSITION_MS.milliseconds)   // unlock once the slide has settled
                         navButtonLocked = false
                     }
                     AnimatedVisibility(
-                        visible = currentRoute == "home" || onSettingsRoute || childFromSettings,
+                        visible = currentRoute == "home" || onSettingsRoute || childFromSettings ||
+                            onAddEditRoute,
                         enter = fadeIn(animationSpec = tween(180)),
                         exit = fadeOut(animationSpec = tween(180)),
                         modifier = Modifier.align(Alignment.TopEnd)
@@ -588,9 +681,10 @@ class MainActivity : ComponentActivity() {
                                     if (navButtonGoesBack) {
                                         // Back to the settings page. Coming back from a child the page
                                         // enters from the left, so the rows are asked to follow it.
+                                        // Leaving the add/edit form for home has no rows to move.
                                         if (childFromSettings) {
                                             settingsRowsEnterFromLeft = true
-                                        } else {
+                                        } else if (onSettingsRoute) {
                                             settingsRowsLeaving = true
                                         }
                                         navController.popBackStack()
@@ -607,7 +701,8 @@ class MainActivity : ComponentActivity() {
                             SettingsNavIcon(
                                 progress = navMorphProgress,
                                 contentDescription = stringResource(
-                                    if (onSettingsRoute) R.string.back else R.string.settings
+                                    if (onSettingsRoute || onAddEditRoute) R.string.back
+                                    else R.string.settings
                                 ),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(24.dp)
@@ -663,7 +758,14 @@ var isSyncingGlobal by mutableStateOf(false)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CountdownApp(navController: NavController, dataManager: DataManager) {
+fun CountdownApp(
+    navController: NavController,
+    dataManager: DataManager,
+    // Where the create button lands on screen, reported in window coordinates so the add/edit
+    // page it opens can grow out of exactly that spot. Defaulted so callers that do not care
+    // about the animation can keep passing just the first two.
+    onCreateButtonPositioned: (Rect) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -822,7 +924,20 @@ fun CountdownApp(navController: NavController, dataManager: DataManager) {
         containerColor = Color.Transparent,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { navController.navigate("add_edit") },
+                onClick = {
+                    // The form now grows out of this button, so the button stays on screen while
+                    // that runs - long enough for an eager second tap to stack a second copy of
+                    // it. Only push while this screen is the top one, mirroring the lock the shared
+                    // corner button applies to itself.
+                    if (navController.currentBackStackEntry?.lifecycle?.currentState ==
+                        androidx.lifecycle.Lifecycle.State.RESUMED
+                    ) {
+                        navController.navigate("add_edit")
+                    }
+                },
+                modifier = Modifier.onGloballyPositioned { coordinates ->
+                    onCreateButtonPositioned(coordinates.boundsInWindow())
+                },
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
                 Icon(
@@ -1270,6 +1385,81 @@ private const val SETTINGS_ICON_SPIN_DEGREES = 180f
 private const val SETTINGS_ICON_MORPH_MS = 280
 private const val NAV_TRANSITION_MS = 450
 
+// ---- Add/edit page animation tuning --------------------------------------------------
+// The add/edit page is opened two ways. From the create button it grows out of the button until
+// it covers the page; from a card it fades in from the middle of the screen. Either way the home
+// screen only dissolves behind it, so the entrance is the whole story. Both runs stay at or under
+// NAV_TRANSITION_MS so the shared corner button is never what the user waits for - see the
+// LaunchedEffect that unlocks it in CountdownApp.
+private const val ADD_EDIT_EXPAND_MS = 430
+private const val ADD_EDIT_FADE_MS = 300
+/** Scale the page starts and ends at for a card tap, i.e. a plain fade from the middle. */
+private const val CARD_EDIT_SCALE = 0.94f
+
+// The add/edit page is three swipeable panes and each pane lists its items top to bottom, so
+// landing on another pane sends every item of that pane in on its own, top to bottom, the way the
+// settings rows do it. The entrance is one step slower than the settings rows so the fields do not
+// flash past, the exit runs in reverse and quicker, and only the longest pane's count is needed
+// for that.
+private const val ADD_EDIT_ITEM_COUNT = 4
+private const val ADD_EDIT_ITEM_ENTER_MS = 320
+private const val ADD_EDIT_ITEM_STAGGER_MS = 55
+private const val ADD_EDIT_ITEM_EXIT_MS = 160
+private const val ADD_EDIT_ITEM_EXIT_STAGGER_MS = 25
+/** The pill at the bottom used to snap its icon between two tints; this is how long it takes now. */
+private const val ADD_EDIT_PILL_TINT_MS = 180
+private const val ADD_EDIT_PILL_ICON_SCALE = 1.12f
+
+/**
+ * Where the create button sits, expressed as fractions of the page container so a transition can
+ * grow the page out of that exact spot: [x] / [y] are the button's centre and [scale] is its side
+ * divided by the container's width.
+ */
+private data class CreateButtonOrigin(val x: Float, val y: Float, val scale: Float)
+
+/**
+ * Used when the add/edit page is opened before home was ever laid out - the create shortcut of a
+ * widget or a notification goes straight to the form. The values sit where the create button
+ * normally is (bottom end), so the page still unfolds from that corner instead of the middle.
+ */
+private val FALLBACK_CREATE_BUTTON_ORIGIN = CreateButtonOrigin(x = 0.9f, y = 0.92f, scale = 0.12f)
+
+/**
+ * Turns the create button and the container it sits in - both measured in window coordinates -
+ * into the fractions [scaleIn] and [scaleOut] need. A missing rectangle, or a container that has
+ * not been measured yet, falls back to [FALLBACK_CREATE_BUTTON_ORIGIN].
+ */
+private fun createButtonOrigin(container: Rect?, button: Rect?): CreateButtonOrigin {
+    if (container == null || button == null || container.width <= 0f || container.height <= 0f) {
+        return FALLBACK_CREATE_BUTTON_ORIGIN
+    }
+    return CreateButtonOrigin(
+        x = ((button.left + button.width / 2f) - container.left) / container.width,
+        y = ((button.top + button.height / 2f) - container.top) / container.height,
+        scale = (button.width / container.width).coerceIn(0.02f, 1f)
+    )
+}
+
+/**
+ * How long the add/edit page takes to open or close for [entry]: the longer expand when it grows
+ * out of, or shrinks back into, the create button, and the shorter fade for a card tap.
+ */
+private fun addEditTransitionMs(entry: NavBackStackEntry?): Int =
+    if (entry.isEditingExistingEvent()) ADD_EDIT_FADE_MS else ADD_EDIT_EXPAND_MS
+
+/**
+ * The add/edit page serves two jobs - it creates a card and it edits an existing one - and both
+ * use the same route, so the two entrances are told apart by the argument the caller passed: an
+ * edit always carries an event id, a create never does. The widget and the notification open the
+ * form without one too, which reads as a create - and is what it is.
+ */
+private fun NavBackStackEntry?.isEditingExistingEvent(): Boolean =
+    this?.arguments?.getString("eventId") != null
+
+/** A destination that takes arguments reports its whole pattern, so cut it at the "?". */
+private fun NavBackStackEntry?.bareRoute(): String? =
+    this?.destination?.route?.substringBefore('?')
+
 /**
  * Staggered entrance/exit for a single row of the settings page, matching the direction the
  * page itself travels: with [visible] the rows fly in from the right edge top to bottom,
@@ -1310,6 +1500,49 @@ private fun Modifier.settingsSlideIn(index: Int, visible: Boolean, fromLeft: Boo
             alpha = progress,
             translationX = sign * (1f - progress) * travel
         )
+}
+
+/**
+ * Staggered entrance/exit for one item of a single add/edit pane, along the lines of
+ * [settingsSlideIn]: with [active] the item travels its own whole pane width in from the edge its
+ * pane arrives from, top to bottom, and without it the order is reversed, it is quicker and the
+ * item travels back out with its pane. [slideSign] is that edge for this pane, resolved once per
+ * pane by the caller. Every item owning its whole route here, instead of trailing one offset
+ * shared with the pane, is what makes the items arrive one after another rather than all together.
+ * Only alpha and the translation are animated - never the layout size - so the fields do not
+ * re-flow while the pane moves, and the travel is read at composition time, like [settingsSlideIn]
+ * reads it, so the layer cannot lag behind the tween.
+ *
+ * It has to be the first link of the chain. A modifier placed to its left is painted by a node
+ * outside this layer, so a card's own background, its ripple and its padding would all stay put
+ * while only the text inside travelled - the layer can only carry what sits inside it.
+ */
+@Composable
+private fun Modifier.addEditPageItem(index: Int, active: Boolean, slideSign: Float): Modifier {
+    val spec = if (active) {
+        tween<Float>(
+            durationMillis = ADD_EDIT_ITEM_ENTER_MS,
+            delayMillis = index * ADD_EDIT_ITEM_STAGGER_MS
+        )
+    } else {
+        tween<Float>(
+            durationMillis = ADD_EDIT_ITEM_EXIT_MS,
+            delayMillis = (ADD_EDIT_ITEM_COUNT - 1 - index) * ADD_EDIT_ITEM_EXIT_STAGGER_MS
+        )
+    }
+    val progress by animateFloatAsState(
+        targetValue = if (active) 1f else 0f,
+        animationSpec = spec,
+        label = "addEditItem$index"
+    )
+    // A full window width is always further than a pane is wide, so an item that has not started
+    // yet sits completely outside its own pane, where the pane's mask hides it: it really does
+    // come in from the edge instead of fading in on the spot.
+    val travel = LocalWindowInfo.current.containerSize.width.toFloat()
+    return this.graphicsLayer(
+        alpha = progress,
+        translationX = slideSign * (1f - progress) * travel
+    )
 }
 
 /**
@@ -2263,6 +2496,9 @@ fun ChangelogScreen(dataManager: DataManager) {
             "zh" -> if (isSimplifiedChinese) "changelog.txt" else "changelog_zh_tw.txt"
             "ja" -> "changelog_ja.txt"
             "ko" -> "changelog_ko.txt"
+            "ru" -> "changelog_ru.txt"
+            "fr" -> "changelog_fr.txt"
+            "de" -> "changelog_de.txt"
             else -> "changelog_en.txt"
         }
         try {
@@ -2606,6 +2842,20 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 3 })
     val selectedTab = pagerState.currentPage
+    // Which edge the items of the pane that is arriving come in from. That pane is the current
+    // pane by the time it animates, and the pager cannot say which side it came from any more, so
+    // the direction is latched here, where the switch is known, and holds for the whole
+    // transition. It has to be kept as its own value rather than compared afresh each time: with
+    // the tab index taken as the previous one, the comparison would settle on one side and a
+    // backward swipe would then send its items in from the wrong edge. Plain remember, not
+    // rememberSaveable: like the other flags of the moment on this screen it is re-derived by the
+    // effect below before any transition can read it.
+    var previousTab by remember { mutableIntStateOf(selectedTab) }
+    var itemsEnterFromRight by remember { mutableStateOf(true) }
+    LaunchedEffect(selectedTab) {
+        itemsEnterFromRight = selectedTab > previousTab
+        previousTab = selectedTab
+    }
     
     val nameEmptyMsg = stringResource(R.string.name_cannot_be_empty)
     val cannotExcludeAllMsg = stringResource(R.string.cannot_exclude_all)
@@ -2672,9 +2922,9 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .statusBarsPadding()
-                    // Same fixed content height as the settings screen, so this title and its back
-                    // button share one centre line with the rest of the app instead of depending on
-                    // how tall the title pill happens to be.
+                    // Same fixed content height as the settings screen, so this title and the
+                    // shared back button that takes the corner slot share one centre line with the
+                    // rest of the app instead of depending on how tall the title pill happens to be.
                     .height(TOP_BAR_CONTENT_HEIGHT),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -2694,24 +2944,12 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(TOP_BAR_ACTION_CORNER))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .clickable {
-                            if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                                navController.popBackStack()
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                // Keeps the slot of the shared settings/back button, just like the search bar does
+                // on the home screen. That button is pinned above the NavHost by the shell, so the
+                // arrow that returns from this form is the same control the home screen showed as
+                // a gear: it turns into the arrow in place instead of a second, static arrow being
+                // drawn here while the gear fades away.
+                Spacer(modifier = Modifier.size(48.dp))
             }
         },
         bottomBar = {
@@ -2754,6 +2992,22 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                         )
                         navItems.forEach { (icon, index) ->
                             val isSelected = selectedTab == index
+                            // The highlight slides along with the finger, but the icon used to jump
+                            // straight from one tint to the other and stayed the same size once it
+                            // became the current pane. Fading the colour and easing the current
+                            // icon up a little makes a tap and a swipe land the same way.
+                            val iconTint by animateColorAsState(
+                                targetValue = if (isSelected) {
+                                    if (isDark) Color.White else MaterialTheme.colorScheme.primary
+                                } else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                                animationSpec = tween(ADD_EDIT_PILL_TINT_MS),
+                                label = "pillTint$index"
+                            )
+                            val iconScale by animateFloatAsState(
+                                targetValue = if (isSelected) ADD_EDIT_PILL_ICON_SCALE else 1f,
+                                animationSpec = tween(ADD_EDIT_PILL_TINT_MS, easing = FastOutSlowInEasing),
+                                label = "pillScale$index"
+                            )
                             Box(
                                 modifier = Modifier
                                     .size(width = 56.dp, height = 48.dp)
@@ -2764,10 +3018,15 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                 Icon(
                                     imageVector = icon,
                                     contentDescription = null,
-                                    tint = if (isSelected) {
-                                        if (isDark) Color.White else MaterialTheme.colorScheme.primary
-                                    } else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(24.dp)
+                                    tint = iconTint,
+                                    // Only the icon grows: the 56x48 hit area and the highlight
+                                    // behind it stay put, so nothing else on the bar shifts.
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .graphicsLayer {
+                                            scaleX = iconScale
+                                            scaleY = iconScale
+                                        }
                                 )
                             }
                         }
@@ -2857,9 +3116,29 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                     .weight(1f),
                 verticalAlignment = Alignment.Top
             ) { page ->
+                // The pane the pager counts as current flips at the halfway point of a drag, so the
+                // items of the arriving pane start coming in while the gesture is still running,
+                // and the pane on its way out starts leaving with it. A pane that is leaving never
+                // is the current pane, so the side it leaves by can be read off the two indices:
+                // left of the current pane it heads out left, right of it it heads out right,
+                // which is simply the way its own pane travels. The arriving pane is the current
+                // pane by then, so its items take the latched edge instead - and the latch takes
+                // over from the index relation with the same sign on the frame the pager flips,
+                // which is what keeps an item from jumping sides when a drag is turned round
+                // halfway or a second swipe arrives before the first has finished.
+                val pageActive = page == selectedTab
+                val slideSign = if (pageActive) {
+                    if (itemsEnterFromRight) 1f else -1f
+                } else if (page > selectedTab) 1f else -1f
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        // Every item comes in from outside the pane, and the pager is a lazy
+                        // layout that only masks its viewport - not the single page - so the pane
+                        // has to mask its own drawing, or an item on its way in would be seen
+                        // sliding across the neighbour. The small bleed keeps the card shadows
+                        // whole.
+                        .clipToBoundsWithBleed()
                         .graphicsLayer {
                             val pageOffset = (
                                     (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
@@ -2899,7 +3178,9 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                         },
                                         isError = nameError,
                                         label = { Text(stringResource(R.string.event_name)) },
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .addEditPageItem(0, pageActive, slideSign)
+                                            .fillMaxWidth(),
                                         singleLine = true,
                                         shape = RoundedCornerShape(24.dp),
                                         colors = OutlinedTextFieldDefaults.colors(
@@ -2912,7 +3193,12 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
                                     Spacer(modifier = Modifier.height(16.dp))
 
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Row(
+                                        modifier = Modifier
+                                            .addEditPageItem(1, pageActive, slideSign)
+                                            .fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
                                         Surface(
                                             onClick = { showDatePicker = true },
                                             modifier = Modifier.weight(1f),
@@ -2959,6 +3245,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
 
                                     Column(
                                         modifier = Modifier
+                                            .addEditPageItem(2, pageActive, slideSign)
                                             .fillMaxWidth()
                                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
                                             .padding(horizontal = 24.dp, vertical = 16.dp)
@@ -3053,6 +3340,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     // Color Section Card
                                     Row(
                                         modifier = Modifier
+                                            .addEditPageItem(0, pageActive, slideSign)
                                             .fillMaxWidth()
                                             .background(
                                                 MaterialTheme.colorScheme.primaryContainer,
@@ -3109,6 +3397,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     // Background Image Section Card
                                     Column(
                                         modifier = Modifier
+                                            .addEditPageItem(1, pageActive, slideSign)
                                             .fillMaxWidth()
                                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
                                             .padding(16.dp)
@@ -3202,6 +3491,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     // Custom Font Section Card
                                     Column(
                                         modifier = Modifier
+                                            .addEditPageItem(2, pageActive, slideSign)
                                             .fillMaxWidth()
                                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
                                             .padding(vertical = 8.dp)
@@ -3303,12 +3593,15 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     Text(
                                         text = stringResource(R.string.reminder_settings),
                                         style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                                        modifier = Modifier
+                                            .addEditPageItem(0, pageActive, slideSign)
+                                            .padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
                                     )
 
                                     val isNotificationPartEnabled = globalNotificationsEnabled && hasNotificationPermission
                                     Column(
                                         modifier = Modifier
+                                            .addEditPageItem(1, pageActive, slideSign)
                                             .fillMaxWidth()
                                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
                                             .padding(20.dp)
@@ -3410,11 +3703,14 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
                                     Text(
                                         text = stringResource(R.string.repeat_settings),
                                         style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                                        modifier = Modifier
+                                            .addEditPageItem(2, pageActive, slideSign)
+                                            .padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
                                     )
 
                                     Column(
                                         modifier = Modifier
+                                            .addEditPageItem(3, pageActive, slideSign)
                                             .fillMaxWidth()
                                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
                                             .padding(20.dp)

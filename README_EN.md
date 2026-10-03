@@ -1,6 +1,6 @@
 <div align="right">
 
-Supported Language:🇨🇳 Chinese 🇺🇸 English 🇯🇵 Japanese 🇰🇷 Korean
+Supported Language:🇨🇳 Chinese 🇺🇸 English 🇯🇵 Japanese 🇰🇷 Korean 🇷🇺 Russian 🇫🇷 French 🇩🇪 German
 
  </div>
 
@@ -119,12 +119,6 @@ The display effect is consistent with the countdown day cards inside the app
 ### Changelog
 
 [![Changelog](https://img.shields.io/badge/Changelog-English-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_en.txt)
-
-[![Changelog](https://img.shields.io/badge/Changelog-日本語-white?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_ja.txt)
-
-[![Changelog](https://img.shields.io/badge/Changelog-繁體中文-red?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_zh_tw.txt)
-
-[![Changelog](https://img.shields.io/badge/Changelog-한국어-black?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_ko.txt)
 
 # Contribution
 

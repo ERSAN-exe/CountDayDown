@@ -1,0 +1,229 @@
+=============================
+Journal des modifications v1.6.4
+3 octobre 2026
+=============================
+Ajout d'animations de transition pour la page d'édition.
+Ajout de l'allemand, du français et du russe.
+
+-----------------------------
+Modifications précédentes
+-----------------------------
+Journal des modifications v1.6.3
+26 septembre 2026
+
+Correction d'un problème où l'arrière-plan personnalisé ne s'affichait pas sur tous les écrans.
+
+-----------------------------
+Modifications précédentes
+-----------------------------
+Journal des modifications v1.6.2
+26 septembre 2026
+
+Ajout d'animations de changement de page.
+Ajustement de la barre de titre.
+Refonte de la logique de sauvegarde.
+
+-----------------------------
+Journal des modifications v1.6.1
+25 septembre 2026
+
+Correction d'un problème où les animations de transition étaient anormales lors de l'utilisation du geste de retour par balayage.
+Correction d'un problème où la palette de couleurs ne suivait pas le glissement du doigt.
+Correction d'un problème où l'application ne proposait pas automatiquement l'installation après le téléchargement d'une mise à jour.
+Correction d'un problème d'occlusion en bas de l'écran de sélection des couleurs.
+Correction d'un problème où un espace apparaissait dans l'animation de la zone de recherche.
+Correction d'un problème où une carte de compte à rebours avec une seule image s'affichait comme une carte noire après avoir réappliqué une configuration exportée.
+
+-----------------------------
+Modifications précédentes
+-----------------------------
+Journal des modifications v1.6
+25 septembre 2026
+
+Ajout de l'affichage de plusieurs images pour les cartes de compte à rebours avec une disposition empilée.
+Ajout de la fonction de prise de vue par appareil photo.
+Ajout de la fonction de recherche.
+Modification de la règle de tri de la page d'accueil pour placer les jours de compte à rebours en haut.
+Correction du bouton de confirmation du sélecteur d'images, qui restait cliquable lorsqu'aucune image n'était sélectionnée.
+Correction d'un problème où le changement de couleur après la sélection d'une image faisait disparaître l'image.
+
+-----------------------------
+Journal des modifications v1.5
+12 septembre 2026
+
+Ajout de la fonction de vérification des mises à jour.
+Refonte de l'icône de l'application.
+Ajustement de la taille du texte dans les boutons de la page des paramètres.
+Synchronisation des journaux de modifications pour les autres langues.
+
+-----------------------------
+Journal des modifications v1.4.3
+7 août 2026
+
+Correction d'un problème où le fait d'appuyer sur le bouton d'image de la page de recadrage du sélecteur d'images dans les paramètres ne permettait pas de revenir à la page de sélection.
+
+-----------------------------
+Journal des modifications v1.4.2
+25 juillet 2026
+
+Ajout de la possibilité d'exporter la carte de compte à rebours sous forme d'image.
+Les indicateurs de boucle et de rappel sont désormais regroupés en une seule icône placée dans le coin inférieur droit, afin de ne pas modifier la taille de la carte.
+Les flèches de tri de la page d'accueil s'affichent désormais sous forme de texte « croissant » et « décroissant ».
+Suppression de l'invite affichée lors de la synchronisation de l'heure système sur la page d'accueil.
+Correction d'un problème où la forme de la boîte de dialogue à effet d'onde était incorrecte lors du clic sur certains boutons.
+Correction d'un problème où le bouton de création de la page d'accueil était trop lumineux en mode sombre.
+Correction d'un problème où la barre de navigation inférieure de la page d'édition de la carte de compte à rebours était trop lumineuse en mode sombre.
+Correction d'un problème où la couleur du thème de la page changeait lors de la sélection des couleurs sur la page de sélection des couleurs.
+Correction d'un problème où les couleurs de la carte changeaient en même temps que la couleur du thème.
+Correction d'un problème où le texte des zones d'options de la page d'édition pouvait être copié.
+
+-----------------------------
+Journal des modifications v1.4.1
+12 juillet 2026
+
+Suppression des boutons de la carte de compte à rebours, remplacés par une édition par appui long.
+Déplacement de la fonction d'importation, désormais disponible dans les paramètres.
+Le curseur d'intensité de l'incrustation et la carte de sélection d'image sont désormais combinés après l'ajout d'images.
+Rétablissement de la position du choix de la couleur du texte sur la page d'édition à l'emplacement d'origine de la couleur de la carte.
+Correction d'un problème où la couleur du thème était trop claire.
+Correction d'un problème où la couleur du bouton de bascule de la page d'accueil était trop sombre en mode sombre.
+Correction d'un problème où la couleur du bouton de notification était trop lumineuse en mode sombre.
+Correction d'un problème où la page de sélection des couleurs ne basculait pas correctement en mode sombre.
+
+-----------------------------
+Journal des modifications v1.4
+19 juin 2026
+
+Ajout d'une nouvelle page de sélection d'images.
+Ajout d'une nouvelle page de sélection de couleurs.
+Les polices personnalisées ajoutées peuvent désormais être enregistrées.
+Les extensions de fichier ne sont plus affichées lors de l'ajout de polices personnalisées.
+Une option distincte de changement de couleur du texte est désormais affichée après l'ajout d'images.
+Correction d'un problème où la couleur par défaut ne s'affichait pas en blanc après l'ajout d'images.
+Correction d'un problème où les couleurs de la carte étaient automatiquement remplacées par du rouge lors de la sélection de dates passées.
+
+-----------------------------
+Journal des modifications v1.3
+13 juin 2026
+
+Ajout de la possibilité d'exclure certains jours de la semaine.
+Les fenêtres de texte de rappel sont désormais réduites par défaut lorsqu'aucun rappel n'est défini.
+Modification de la page de sélection d'images.
+Modification du nom par défaut lors de l'exportation des configurations.
+Correction d'un problème où les images d'arrière-plan personnalisées n'étaient pas exportées lors de l'exportation des configurations.
+Correction d'un problème où les dates de la page d'aperçu n'étaient pas synchronisées avec les cartes de la page d'accueil lorsque le compte à rebours en boucle était activé.
+Correction d'un problème où le bouton de confirmation ne pouvait pas être cliqué sur la page des couleurs sur les petits appareils.
+
+-----------------------------
+Journal des modifications v1.2.2
+13 juin 2026
+
+Suppression de l'affichage de l'e-mail de retour d'information sur la page À propos.
+Modification de l'animation de la page de création de carte de compte à rebours.
+Modification de la fenêtre de sélection du widget d'écran d'accueil.
+Une invite apparaît désormais et la navigation est automatique lors de la tentative de création d'une carte de compte à rebours sans nom.
+Le cadre de recadrage est désormais limité à l'image afin de corriger les bordures noires des images.
+Correction d'un problème où les widgets ne synchronisaient pas correctement les réglages de luminosité de l'arrière-plan.
+
+-----------------------------
+Journal des modifications v1.2.1
+8 juin 2026
+
+Ajout d'un lien vers le projet GitHub sur la page des paramètres.
+Ajout d'une icône sur la page À propos.
+Les pages d'édition peuvent désormais être changées en balayant vers la gauche et la droite.
+Correction d'un problème où l'invite de couleur affichait toujours des couleurs personnalisées lors du suivi de la couleur d'arrière-plan.
+Correction d'un problème où les noms des polices personnalisées importées s'affichaient incorrectement.
+Correction d'un problème où le recadrage de l'image était incorrect sur les appareils ayant un rapport d'affichage différent.
+Mise à jour des traductions et ajustement de certains textes.
+
+-----------------------------
+Journal des modifications v1.2
+8 juin 2026
+
+Ajout d'animations de changement de page.
+Ajout d'animations de changement de carte sur la page d'accueil.
+Ajout d'animations de changement de la page d'édition.
+Correction d'un problème où la barre de titre de la page des paramètres pouvait être défilée.
+Correction d'un plantage causé par des clics répétés sur le bouton de retour et le bouton des paramètres.
+Correction d'un problème où les couleurs prédéfinies apparaissaient dans les couleurs récemment utilisées.
+Correction d'un scintillement anormal lors du changement de page.
+Optimisation de la taille de l'application.
+
+-----------------------------
+Journal des modifications v1.1
+7 juin 2026
+
+Modification de la disposition de l'interface de création de carte de compte à rebours.
+Ajout de la possibilité d'importer des polices personnalisées.
+Ajout de la possibilité de personnaliser l'arrière-plan de l'application.
+Les couleurs utilisées sont désormais enregistrées et peuvent être supprimées par appui long.
+Les couleurs de thème des images peuvent désormais être définies comme couleurs de thème de l'application.
+Correction des messages d'autorisation de notification lorsque l'autorisation n'est pas accordée ou est désactivée manuellement.
+
+-----------------------------
+Journal des modifications v1.0
+31 mai 2026
+
+Refonte complète de la disposition de l'application.
+La page d'accueil prend désormais en charge l'affichage d'une petite carte de compte à rebours et un bouton de bascule a été ajouté.
+Ajout d'une nouvelle interface de recadrage d'image.
+Ajout d'icônes d'aperçu pour les widgets d'écran d'accueil.
+Correction d'un problème où les couleurs de thème ne pouvaient pas être changées correctement.
+Correction d'un problème où les cartes de compte à rebours étaient mal triées.
+Correction de problèmes de texte de localisation.
+
+-----------------------------
+Journal des modifications v0.5
+16 mai 2026
+
+Refonte de la page de création de compte à rebours, ajout de la prise en charge de l'aperçu et modification de la disposition.
+La carte de compte à rebours peut désormais utiliser des images comme arrière-plan.
+L'exportation des fichiers de configuration exporte désormais aussi les images personnalisées.
+Correction de textes mal localisés.
+Transformation de la fenêtre du journal des mises à jour en une page distincte.
+
+-----------------------------
+Journal des modifications v0.4
+15 mai 2026
+
+Modification de l'icône de l'application.
+Ajout de widgets de taille 4×2.
+Suppression de l'affichage du fuseau horaire de la page des paramètres.
+Ajout des fonctions d'importation et d'exportation de données.
+Correction de textes mal localisés.
+
+-----------------------------
+Journal des modifications v0.3
+14 mai 2026
+
+Ajout de widgets d'écran d'accueil de taille 2×2.
+Ajout d'options de tri sur la page d'accueil.
+Modification des styles et des modes d'affichage des cartes de compte à rebours.
+Réajout de l'affichage du fuseau horaire dans la page des paramètres.
+Ajout de l'e-mail de retour d'information.
+Ajout de la possibilité de modifier les couleurs de thème de l'application.
+Ajout de la prise en charge du chinois traditionnel et du coréen.
+
+-----------------------------
+Journal des modifications v0.2
+12 mai 2026
+
+Ajout de la fonction de compte à rebours répétitif.
+Ajout d'une page de paramètres remplaçant l'ancienne page À propos.
+Ajout du tri par temps restant avant l'événement.
+Ajout du basculement en mode sombre.
+Ajout du bouton de notification.
+Ajout de la page de création de compte à rebours et modification de la disposition du contenu.
+Le format d'affichage du compte à rebours s'adapte désormais automatiquement au temps restant.
+Suppression de l'affichage du fuseau horaire ; l'heure est désormais synchronisée automatiquement toutes les cinq minutes.
+Ajout de la prise en charge de plusieurs langues : anglais et japonais.
+
+-----------------------------
+Journal des modifications v0.1
+10 mai 2026
+
+Prise en charge du décompte positif et du compte à rebours en jours.
+Personnalisation des couleurs du compte à rebours.
+Rappels de notification.
+Synchronisation manuelle de l'heure.

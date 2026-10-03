@@ -12,8 +12,8 @@ android {
         applicationId = "com.Zero23.countdown"
         minSdk = 31
         targetSdk = 37
-        versionCode = 16
-        versionName = "1.6.3"
+        versionCode = 17
+        versionName = "1.6.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -22,7 +22,7 @@ android {
         }
         @Suppress("UnstableApiUsage")
         androidResources {
-            localeFilters += listOf("en", "zh-rCN", "zh-rTW", "ja", "ko")
+            localeFilters += listOf("en", "zh-rCN", "zh-rTW", "ja", "ko", "ru", "fr", "de")
         }
     }
 
