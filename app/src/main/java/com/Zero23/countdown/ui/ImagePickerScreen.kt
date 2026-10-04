@@ -269,7 +269,7 @@ fun ImagePickerScreen(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Adaptive(minSize = 110.dp),
                     contentPadding = PaddingValues(
                         // Clears the floating top bar, which is TOP_BAR_CONTENT_HEIGHT of content
                         // plus the bar's own 8dp inset. The extra two offsets are the difference
