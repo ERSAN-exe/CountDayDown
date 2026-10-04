@@ -106,6 +106,7 @@ class WidgetConfigActivity : ComponentActivity() {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth(0.85f)
+                            .widthIn(max = 560.dp)
                             .wrapContentHeight()
                             .clickable(enabled = false) {}, // Prevent click propagation
                         shape = RoundedCornerShape(28.dp),

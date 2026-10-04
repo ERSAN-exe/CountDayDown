@@ -1291,7 +1291,7 @@ fun CountdownApp(
                 ) { targetIsGridView ->
                     if (targetIsGridView) {
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
+                            columns = GridCells.Adaptive(minSize = 220.dp),
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1311,16 +1311,24 @@ fun CountdownApp(
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(16.dp)
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             items(items = events, key = { it.id }) { event ->
-                                CountdownItem(
-                                    event = event,
-                                    now = currentTick,
-                                    onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
-                                    onDelete = { eventToDelete = event },
-                                    onCopy = { onCopy(event) }
-                                )
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(modifier = Modifier.widthIn(max = 720.dp)) {
+                                        CountdownItem(
+                                            event = event,
+                                            now = currentTick,
+                                            onEdit = { navController.navigate("add_edit?eventId=${event.id}") },
+                                            onDelete = { eventToDelete = event },
+                                            onCopy = { onCopy(event) }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1948,510 +1956,555 @@ fun SettingsScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
+            val configuration = LocalConfiguration.current
+            val isTablet = configuration.screenWidthDp >= 600
 
-            // Setting card content wrapped with padding horizontal = 24.dp so they align beautifully
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-            ) {
-                // Appearance Section
-                Text(
-                    text = stringResource(R.string.appearance),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .settingsSlideIn(0, rowsVisible, rowsEnterFromLeft)
-                        .padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
-                )
-
-                // Theme Mode Card
-                var isThemeMenuExpanded by remember { mutableStateOf(false) }
-                val themeOptions = listOf(
-                    stringResource(R.string.theme_follow_system),
-                    stringResource(R.string.theme_light),
-                    stringResource(R.string.theme_dark)
-                )
-
-                Row(
-                    modifier = Modifier
-                        .settingsSlideIn(1, rowsVisible, rowsEnterFromLeft)
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(stringResource(R.string.page_appearance), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    
-                    Box(
+            val appearanceContent = @Composable {
+                Column {
+                    // Appearance Section
+                    Text(
+                        text = stringResource(R.string.appearance),
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .clickable { isThemeMenuExpanded = true }
+                            .settingsSlideIn(0, rowsVisible, rowsEnterFromLeft)
+                            .padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                    )
+
+                    // Theme Mode Card
+                    var isThemeMenuExpanded by remember { mutableStateOf(false) }
+                    val themeOptions = listOf(
+                        stringResource(R.string.theme_follow_system),
+                        stringResource(R.string.theme_light),
+                        stringResource(R.string.theme_dark)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .settingsSlideIn(1, rowsVisible, rowsEnterFromLeft)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = themeOptions[themeMode],
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        DropdownMenu(
-                            expanded = isThemeMenuExpanded,
-                            onDismissRequest = { isThemeMenuExpanded = false }
+                        Text(stringResource(R.string.page_appearance), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .clickable { isThemeMenuExpanded = true }
                         ) {
-                            themeOptions.forEachIndexed { index, option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = {
-                                        scope.launch { dataManager.setThemeMode(index) }
-                                        isThemeMenuExpanded = false
+                            Text(
+                                text = themeOptions[themeMode],
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            DropdownMenu(
+                                expanded = isThemeMenuExpanded,
+                                onDismissRequest = { isThemeMenuExpanded = false }
+                            ) {
+                                themeOptions.forEachIndexed { index, option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option) },
+                                        onClick = {
+                                            scope.launch { dataManager.setThemeMode(index) }
+                                            isThemeMenuExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Theme Color Card
+                    Column(
+                        modifier = Modifier
+                            .settingsSlideIn(2, rowsVisible, rowsEnterFromLeft)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                            .padding(16.dp)
+                    ) {
+                        Text(stringResource(R.string.app_theme_color), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(
+                            text = when (themeColorHex) {
+                                null -> stringResource(R.string.theme_follow_system)
+                                appBgThemeColor -> if (appBgImage != null) stringResource(R.string.follow_bg) else "${stringResource(R.string.custom_color)} ($themeColorHex)"
+                                else -> "${stringResource(R.string.custom_color)} ($themeColorHex)"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Follow System Button
+                            Surface(
+                                onClick = { scope.launch { dataManager.setThemeColor(null) } },
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                    val followSystemText = stringResource(R.string.theme_follow_system)
+                                    Text(
+                                        text = followSystemText,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontSize = if (followSystemText.length > 8) 10.sp else 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+                            // Follow BG Button
+                            Surface(
+                                onClick = { scope.launch { dataManager.setThemeColor(appBgThemeColor) } },
+                                enabled = appBgImage != null,
+                                modifier = Modifier.weight(1f),
+                                color = if (appBgImage != null) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                    val followBgText = stringResource(R.string.follow_bg)
+                                    Text(
+                                        text = followBgText,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontSize = if (followBgText.length > 8) 10.sp else 12.sp,
+                                        color = if (appBgImage != null) MaterialTheme.colorScheme.onSurface else Color.Gray.copy(alpha = 0.6f),
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+                            // Color Picker Box
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        themeColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { MaterialTheme.colorScheme.primary } } ?: MaterialTheme.colorScheme.primary
+                                    )
+                                    .clickable {
+                                        val encodedColor = themeColorHex?.let { Uri.encode(it) } ?: ""
+                                        navController.navigate("color_picker?initialColor=$encodedColor")
+                                    }
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Global Background Image Card
+                    Column(
+                        modifier = Modifier
+                            .settingsSlideIn(3, rowsVisible, rowsEnterFromLeft)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(stringResource(R.string.background_image), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (appBgImage != null) {
+                                    IconButton(onClick = {
+                                        val removedUri = appBgImage
+                                        scope.launch {
+                                            dataManager.setAppBackgroundImage(null)
+                                            localImageFileOf(removedUri)?.delete()
+                                        }
+                                    }) {
+                                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                                IconButton(onClick = { onPickBg() }) {
+                                    Icon(Icons.Default.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                }
+                            }
+                        }
+
+                        if (appBgImage != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = stringResource(R.string.mask_intensity),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                            Slider(
+                                value = appBgBrightness,
+                                onValueChange = { scope.launch { dataManager.setAppBackgroundBrightness(it) } },
+                                valueRange = 0f..1f,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+
+            val notificationsContent = @Composable {
+                Column {
+                    // Notifications Section
+                    Text(
+                        text = stringResource(R.string.notifications),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .settingsSlideIn(4, rowsVisible, rowsEnterFromLeft)
+                            .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .settingsSlideIn(5, rowsVisible, rowsEnterFromLeft)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        var hasNotifPermission by remember {
+                            mutableStateOf(
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                                } else true
+                            )
+                        }
+
+                        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                        DisposableEffect(lifecycleOwner) {
+                            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                    hasNotifPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                                    } else true
+                                }
+                            }
+                            lifecycleOwner.lifecycle.addObserver(observer)
+                            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.global_notification_switch), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(
+                                text = if (!hasNotifPermission) stringResource(R.string.notif_permission_msg)
+                                       else if (!notificationsEnabled) stringResource(R.string.notif_disabled_msg)
+                                       else stringResource(R.string.notification_switch_desc),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (hasNotifPermission && notificationsEnabled) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.error
+                            )
+                            if (!hasNotifPermission) {
+                                Text(
+                                    text = stringResource(R.string.go_to_settings),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.clickable {
+                                        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        }
+                                        context.startActivity(intent)
                                     }
                                 )
                             }
                         }
+                        Switch(
+                            checked = notificationsEnabled && hasNotifPermission,
+                            onCheckedChange = { scope.launch { dataManager.setNotificationsEnabled(it) } },
+                            enabled = hasNotifPermission,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                checkedBorderColor = Color.Transparent,
+                                uncheckedThumbColor = Color.White,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                uncheckedBorderColor = Color.Transparent,
+                                disabledUncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                                disabledUncheckedThumbColor = Color.Gray.copy(alpha = 0.5f)
+                            )
+                        )
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Theme Color Card
-                Column(
-                    modifier = Modifier
-                        .settingsSlideIn(2, rowsVisible, rowsEnterFromLeft)
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    Text(stringResource(R.string.app_theme_color), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            val backupContent = @Composable {
+                Column {
+                    // Import Section
                     Text(
-                        text = when (themeColorHex) {
-                            null -> stringResource(R.string.theme_follow_system)
-                            appBgThemeColor -> if (appBgImage != null) stringResource(R.string.follow_bg) else "${stringResource(R.string.custom_color)} ($themeColorHex)"
-                            else -> "${stringResource(R.string.custom_color)} ($themeColorHex)"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        text = stringResource(R.string.backup_restore),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .settingsSlideIn(6, rowsVisible, rowsEnterFromLeft)
+                            .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .settingsSlideIn(7, rowsVisible, rowsEnterFromLeft)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Follow System Button
                         Surface(
-                            onClick = { scope.launch { dataManager.setThemeColor(null) } },
+                            onClick = { importLauncher.launch(arrayOf("text/plain", "application/zip")) },
                             modifier = Modifier.weight(1f),
                             color = MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                                val followSystemText = stringResource(R.string.theme_follow_system)
-                                Text(
-                                    text = followSystemText,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontSize = if (followSystemText.length > 8) 10.sp else 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
+                            Row(
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.FileDownload, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(stringResource(R.string.import_config), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
                             }
                         }
-                        // Follow BG Button
+
+                        val backupPrefix = stringResource(R.string.backup)
                         Surface(
-                            onClick = { scope.launch { dataManager.setThemeColor(appBgThemeColor) } },
-                            enabled = appBgImage != null,
+                            onClick = {
+                                val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                                exportLauncher.launch("${backupPrefix}_$time.zip")
+                            },
                             modifier = Modifier.weight(1f),
-                            color = if (appBgImage != null) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                                val followBgText = stringResource(R.string.follow_bg)
-                                Text(
-                                    text = followBgText,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontSize = if (followBgText.length > 8) 10.sp else 12.sp,
-                                    color = if (appBgImage != null) MaterialTheme.colorScheme.onSurface else Color.Gray.copy(alpha = 0.6f),
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
+                            Row(
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.FileUpload, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(stringResource(R.string.export_config), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
                             }
                         }
-                        // Color Picker Box
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    themeColorHex?.let { try { Color(it.toColorInt()) } catch(_: Exception) { MaterialTheme.colorScheme.primary } } ?: MaterialTheme.colorScheme.primary
-                                )
-                                .clickable {
-                                    val encodedColor = themeColorHex?.let { Uri.encode(it) } ?: ""
-                                    navController.navigate("color_picker?initialColor=$encodedColor")
-                                }
-                        )
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
+            }
 
-                // Global Background Image Card
-                Column(
-                    modifier = Modifier
-                        .settingsSlideIn(3, rowsVisible, rowsEnterFromLeft)
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+            val aboutContent = @Composable {
+                Column {
+                    // About Section
+                    Text(
+                        text = stringResource(R.string.about),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .settingsSlideIn(8, rowsVisible, rowsEnterFromLeft)
+                            .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .settingsSlideIn(9, rowsVisible, rowsEnterFromLeft)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                            .padding(24.dp)
                     ) {
-                        Text(stringResource(R.string.background_image), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (appBgImage != null) {
-                                IconButton(onClick = {
-                                    val removedUri = appBgImage
-                                    scope.launch {
-                                        dataManager.setAppBackgroundImage(null)
-                                        localImageFileOf(removedUri)?.delete()
-                                    }
-                                }) {
-                                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                            Image(
+                                painter = painterResource(id = R.drawable.my_logo),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.app_name),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.version_text),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(
+                                        text = stringResource(R.string.made_by),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    )
                                 }
                             }
-                            IconButton(onClick = { onPickBg() }) {
-                                Icon(Icons.Default.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                            }
                         }
-                    }
 
-                    if (appBgImage != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalDivider(
-                            thickness = 1.dp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = stringResource(R.string.mask_intensity),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                        Slider(
-                            value = appBgBrightness,
-                            onValueChange = { scope.launch { dataManager.setAppBackgroundBrightness(it) } },
-                            valueRange = 0f..1f,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
+                        Spacer(modifier = Modifier.height(32.dp))
 
-                // Notifications Section
-                Text(
-                    text = stringResource(R.string.notifications),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .settingsSlideIn(4, rowsVisible, rowsEnterFromLeft)
-                        .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
-                )
-
-
-                Row(
-                    modifier = Modifier
-                        .settingsSlideIn(5, rowsVisible, rowsEnterFromLeft)
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    var hasNotifPermission by remember {
-                        mutableStateOf(
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                            } else true
-                        )
-                    }
-
-                    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-                    DisposableEffect(lifecycleOwner) {
-                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                                hasNotifPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                                } else true
-                            }
-                        }
-                        lifecycleOwner.lifecycle.addObserver(observer)
-                        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.global_notification_switch), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Text(
-                            text = if (!hasNotifPermission) stringResource(R.string.notif_permission_msg)
-                                   else if (!notificationsEnabled) stringResource(R.string.notif_disabled_msg)
-                                   else stringResource(R.string.notification_switch_desc),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (hasNotifPermission && notificationsEnabled) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.error
-                        )
-                        if (!hasNotifPermission) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .clickable { navController.navigate("changelog") }
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.History,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = stringResource(R.string.go_to_settings),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.clickable {
-                                    val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                text = stringResource(R.string.changelog_full_title),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .clickable {
+                                    val intent = Intent(Intent.ACTION_VIEW, "https://github.com/ERSAN-exe/CountDayDown".toUri())
+                                    context.startActivity(intent)
+                                }
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_github),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = stringResource(R.string.github),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .clickable {
+                                    checkUpdate(context, scope, onUpdateAvailable = { version, remote, local ->
+                                        onUpdateFound(version, remote, local)
+                                    })
+                                }
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Update,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = stringResource(R.string.check_update),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .clickable {
+                                    val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                        data = "mailto:ZErO23_FeedBack@outlook.com".toUri()
                                     }
                                     context.startActivity(intent)
                                 }
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Email,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = stringResource(R.string.feedback_email),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
-                    Switch(
-                        checked = notificationsEnabled && hasNotifPermission,
-                        onCheckedChange = { scope.launch { dataManager.setNotificationsEnabled(it) } },
-                        enabled = hasNotifPermission,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.primary,
-                            checkedTrackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                            checkedBorderColor = Color.Transparent,
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                            uncheckedBorderColor = Color.Transparent,
-                            disabledUncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                            disabledUncheckedThumbColor = Color.Gray.copy(alpha = 0.5f)
-                        )
-                    )
                 }
+            }
 
-                // Import Section
-                Text(
-                    text = stringResource(R.string.backup_restore),
-                    style = MaterialTheme.typography.bodyLarge,
+            if (isTablet) {
+                Box(
                     modifier = Modifier
-                        .settingsSlideIn(6, rowsVisible, rowsEnterFromLeft)
-                        .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
-                )
-
-                Row(
-                    modifier = Modifier
-                        .settingsSlideIn(7, rowsVisible, rowsEnterFromLeft)
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(bottom = 32.dp),
+                    contentAlignment = Alignment.TopCenter
                 ) {
-                    Surface(
-                        onClick = { importLauncher.launch(arrayOf("text/plain", "application/zip")) },
-                        modifier = Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(12.dp)
+                    Row(
+                        modifier = Modifier
+                            .widthIn(max = 1040.dp)
+                            .padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(24.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Default.FileDownload, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.import_config), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
+                        Column(modifier = Modifier.weight(1f)) {
+                            appearanceContent()
+                            notificationsContent()
                         }
-                    }
-
-                    val backupPrefix = stringResource(R.string.backup)
-                    Surface(
-                        onClick = {
-                            val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
-                            exportLauncher.launch("${backupPrefix}_$time.zip")
-                        },
-                        modifier = Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Default.FileUpload, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.export_config), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
+                        Column(modifier = Modifier.weight(1f)) {
+                            backupContent()
+                            aboutContent()
                         }
                     }
                 }
-
-                // About Section
-                Text(
-                    text = stringResource(R.string.about),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .settingsSlideIn(8, rowsVisible, rowsEnterFromLeft)
-                        .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
-                )
-
+            } else {
                 Column(
                     modifier = Modifier
-                        .settingsSlideIn(9, rowsVisible, rowsEnterFromLeft)
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                        .padding(24.dp)
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 32.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.my_logo),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.app_name),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                                Text(
-                                    text = stringResource(R.string.version_text),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Text(
-                                    text = stringResource(R.string.made_by),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .clickable { navController.navigate("changelog") }
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.History,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.changelog_full_title),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .clickable {
-                                val intent = Intent(Intent.ACTION_VIEW, "https://github.com/ERSAN-exe/CountDayDown".toUri())
-                                context.startActivity(intent)
-                            }
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_github),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.github),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .clickable {
-                                checkUpdate(context, scope, onUpdateAvailable = { version, remote, local ->
-                                    onUpdateFound(version, remote, local)
-                                })
-                            }
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Update,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.check_update),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .clickable {
-                                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = "mailto:ZErO23_FeedBack@outlook.com".toUri()
-                                }
-                                context.startActivity(intent)
-                            }
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Email,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.feedback_email),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    appearanceContent()
+                    notificationsContent()
+                    backupContent()
+                    aboutContent()
                 }
-
-                Spacer(modifier = Modifier.height(48.dp))
             }
         }
     }
@@ -2552,13 +2605,19 @@ fun ChangelogScreen(dataManager: DataManager) {
                 Spacer(modifier = Modifier.size(48.dp))
             }
 
+            val isTablet = configuration.screenWidthDp >= 600
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                contentAlignment = if (isTablet) Alignment.TopCenter else Alignment.TopStart
             ) {
-                Text(text = changelogText, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = changelogText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.widthIn(max = 800.dp)
+                )
             }
         }
     }
@@ -3055,38 +3114,36 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
         Column(
             modifier = Modifier
                 .padding(innerPadding)
-                .fillMaxSize()
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Static Preview Card Area (Always on top)
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
-                // No fixed height here: a card with several pictures is taller than its front
-                // face, because the peeking layers live in the strip above the card, and a long
-                // title wraps to a second line. Clamping this slot would squeeze the card and
-                // cut the countdown line off.
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
             ) {
-                val previewBgUris = backgroundImageUris.filter { it.isNotBlank() }
-                val previewEvent = CountdownEvent(
-                    id = "preview",
-                    name = name.ifBlank { stringResource(R.string.event_name) },
-                    targetDateTime = LocalDateTime.of(selectedDate, selectedTime).toString(),
-                    colorHex = selectedColorHex,
-                    backgroundImageUri = previewBgUris.firstOrNull() ?: backgroundImageUri,
-                    backgroundImageUris = previewBgUris.ifEmpty { null },
-                    widgetImageUri = widgetImageUri,
-                    backgroundBrightness = backgroundBrightness,
-                    createdAt = initialEvent?.createdAt ?: System.currentTimeMillis(),
-                    notificationContent = notificationContent,
-                    reminderMinutesBefore = if (reminderMinutes == -1) null else reminderMinutes,
-                    repeatType = repeatType,
-                    repeatInterval = repeatInterval.toIntOrNull(),
-                    repeatUnit = repeatUnit,
-                    customFontPath = customFontPath,
-                    excludedDays = if (isExcludeEnabled) selectedExcludedDays.ifEmpty { null } else null
-                )
-                Box {
+                Box(modifier = Modifier.widthIn(max = 600.dp)) {
+                    val previewBgUris = backgroundImageUris.filter { it.isNotBlank() }
+                    val previewEvent = CountdownEvent(
+                        id = "preview",
+                        name = name.ifBlank { stringResource(R.string.event_name) },
+                        targetDateTime = LocalDateTime.of(selectedDate, selectedTime).toString(),
+                        colorHex = selectedColorHex,
+                        backgroundImageUri = previewBgUris.firstOrNull() ?: backgroundImageUri,
+                        backgroundImageUris = previewBgUris.ifEmpty { null },
+                        widgetImageUri = widgetImageUri,
+                        backgroundBrightness = backgroundBrightness,
+                        createdAt = initialEvent?.createdAt ?: System.currentTimeMillis(),
+                        notificationContent = notificationContent,
+                        reminderMinutesBefore = if (reminderMinutes == -1) null else reminderMinutes,
+                        repeatType = repeatType,
+                        repeatInterval = repeatInterval.toIntOrNull(),
+                        repeatUnit = repeatUnit,
+                        customFontPath = customFontPath,
+                        excludedDays = if (isExcludeEnabled) selectedExcludedDays.ifEmpty { null } else null
+                    )
                     CountdownItem(
                         event = previewEvent,
                         onEdit = {},
@@ -3109,13 +3166,19 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
             Spacer(modifier = Modifier.height(16.dp))
 
             // Pager for swipeable settings (Fills the space left under the preview card)
-            androidx.compose.foundation.pager.HorizontalPager(
-                state = pagerState,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalAlignment = Alignment.Top
-            ) { page ->
+                contentAlignment = Alignment.TopCenter
+            ) {
+                androidx.compose.foundation.pager.HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .widthIn(max = 720.dp)
+                        .fillMaxHeight(),
+                    verticalAlignment = Alignment.Top
+                ) { page ->
                 // The pane the pager counts as current flips at the halfway point of a drag, so the
                 // items of the arriving pane start coming in while the gesture is still running,
                 // and the pane on its way out starts leaving with it. A pane that is leaving never
@@ -3822,6 +3885,7 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
             }
         }
     }
+}
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(

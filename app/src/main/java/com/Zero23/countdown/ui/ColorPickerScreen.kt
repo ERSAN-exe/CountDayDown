@@ -207,13 +207,19 @@ fun ColorPickerScreen(
                 }
             }
         ) { innerPadding ->
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp)
+                    .padding(innerPadding),
+                contentAlignment = Alignment.TopCenter
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .widthIn(max = 640.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp)
+                ) {
                 // 1. Preview
                 Text(
                     text = stringResource(R.string.preview),
@@ -590,4 +596,5 @@ fun ColorPickerScreen(
             }
         }
     }
+}
 }
