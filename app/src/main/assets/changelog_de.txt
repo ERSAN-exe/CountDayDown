@@ -14,8 +14,6 @@ Frühere Änderungsprotokolle
 Ein Problem behoben, bei dem der benutzerdefinierte Hintergrund nicht auf allen Bildschirmen angezeigt wurde.
 
 -----------------------------
-Frühere Änderungsprotokolle
------------------------------
 Änderungsprotokoll v1.6.2
 26. September 2026
 

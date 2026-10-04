@@ -14,8 +14,6 @@ Journal des modifications v1.6.3
 Correction d'un problème où l'arrière-plan personnalisé ne s'affichait pas sur tous les écrans.
 
 -----------------------------
-Modifications précédentes
------------------------------
 Journal des modifications v1.6.2
 26 septembre 2026
 

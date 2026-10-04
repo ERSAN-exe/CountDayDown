@@ -14,8 +14,6 @@ September 26, 2026
 Fixed an issue where the custom background was not shown on all screens.
 
 -----------------------------
-Previous Changelogs
------------------------------
 v1.6.2 Changelog
 September 26, 2026
 
