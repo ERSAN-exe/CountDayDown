@@ -20,8 +20,7 @@ A lightweight Android countdown day application
 
 <p>
 
-![Platform](https://img.shields.io/badge/platform-Android-green?logo=android)   ![Language](https://img.shields.io/badge/language-Kotlin-purple?logo=kotlin)    ![Android](https://img.shields.io/badge/Android-12%2B%20(API%2031)-green?logo=android)  ![License](https://img.shields.io/badge/license-MIT-orange?logo=opensourceinitiative)
-
+![Platform](https://img.shields.io/badge/platform-Android-green?logo=android)   ![Language](https://img.shields.io/badge/language-Kotlin-purple?logo=kotlin)    ![Android](https://img.shields.io/badge/Android-12%2B%20(API%2031)-green?logo=android)  ![License](https://img.shields.io/badge/license-GPL--3.0-orange?logo=opensourceinitiative)
 </p>
 
 </div>
