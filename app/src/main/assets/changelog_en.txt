@@ -1,4 +1,12 @@
 =============================
+v1.7 Changelog
+October 17, 2026
+=============================
+The update package is now deleted after the update is installed.
+
+-----------------------------
+Previous Changelogs
+-----------------------------
 v1.6.4 Changelog
 October 3, 2026
 =============================

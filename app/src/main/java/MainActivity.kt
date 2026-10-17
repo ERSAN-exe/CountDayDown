@@ -136,8 +136,11 @@ import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.os.Environment
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 import com.Zero23.countdown.notifications.NotificationHelper
 import com.Zero23.countdown.ui.theme.CountDownTheme
+import com.Zero23.countdown.update.UPDATE_APK_FILE_NAME
+import com.Zero23.countdown.update.cleanupUpdateApkDownloads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -269,6 +272,12 @@ class MainActivity : ComponentActivity() {
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(updateReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+        }
+        // A start after an update lands here as well, so this is the fallback that removes the
+        // APK even when the package-replaced broadcast did not get through. Downloads that are
+        // still waiting to be installed are kept, see cleanupUpdateApkDownloads.
+        lifecycleScope.launch(Dispatchers.IO) {
+            cleanupUpdateApkDownloads(applicationContext)
         }
         enableEdgeToEdge()
         setContent {
@@ -5227,7 +5236,7 @@ private fun startUpdateDownload(context: Context) {
             .setTitle(context.getString(R.string.app_name))
             .setDescription(context.getString(R.string.download_start))
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "CountDayDown_Update.apk")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, UPDATE_APK_FILE_NAME)
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
 

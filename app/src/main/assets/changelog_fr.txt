@@ -1,4 +1,12 @@
 =============================
+Journal des modifications v1.7
+17 octobre 2026
+=============================
+Le paquet de mise à jour est désormais supprimé une fois l'installation terminée.
+
+-----------------------------
+Modifications précédentes
+-----------------------------
 Journal des modifications v1.6.4
 3 octobre 2026
 =============================

@@ -71,6 +71,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Fires in the newly installed version right after an update, which is where the
+             downloaded update APK is removed instead of staying in the Downloads folder. -->
+        <receiver
+            android:name=".update.UpdateApkCleanupReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name="com.canhub.cropper.CropImageActivity"
             android:theme="@style/Theme.AppCompat.Light.DarkActionBar"

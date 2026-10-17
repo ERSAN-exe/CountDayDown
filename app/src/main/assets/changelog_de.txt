@@ -1,4 +1,12 @@
 =============================
+Änderungsprotokoll v1.7
+17. Oktober 2026
+=============================
+Das Update-Paket wird jetzt nach der Installation des Updates gelöscht.
+
+-----------------------------
+Frühere Änderungsprotokolle
+-----------------------------
 Änderungsprotokoll v1.6.4
 3. Oktober 2026
 =============================
