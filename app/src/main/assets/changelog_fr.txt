@@ -9,7 +9,7 @@ Modifications précédentes
 -----------------------------
 Journal des modifications v1.6.4
 3 octobre 2026
-=============================
+
 Ajout d'animations de transition pour la page d'édition.
 Ajout de l'allemand, du français et du russe.
 

@@ -9,7 +9,7 @@ Previous Changelogs
 -----------------------------
 v1.6.4 Changelog
 October 3, 2026
-=============================
+
 Added transition animations for the edit page.
 Added German, French, and Russian.
 

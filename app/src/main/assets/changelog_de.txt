@@ -9,7 +9,7 @@ Frühere Änderungsprotokolle
 -----------------------------
 Änderungsprotokoll v1.6.4
 3. Oktober 2026
-=============================
+
 Übergangsanimationen für die Bearbeitungsseite hinzugefügt.
 Deutsch, Französisch und Russisch hinzugefügt.
 
