@@ -42,7 +42,6 @@ import com.Zero23.countdown.TOP_BAR_TITLE_LINE_HEIGHT
 import com.Zero23.countdown.data.DataManager
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ColorPickerScreen(
     navController: NavController,

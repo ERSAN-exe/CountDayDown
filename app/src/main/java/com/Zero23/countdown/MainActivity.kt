@@ -97,6 +97,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
@@ -765,7 +766,6 @@ var lastSyncTimeMillis by mutableLongStateOf(0L)
 var globalTimeOffset by mutableLongStateOf(0L)
 var isSyncingGlobal by mutableStateOf(false)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CountdownApp(
     navController: NavController,
@@ -1478,13 +1478,13 @@ private fun NavBackStackEntry?.bareRoute(): String? =
  */
 @Composable
 private fun Modifier.settingsSlideIn(index: Int, visible: Boolean, fromLeft: Boolean): Modifier {
-    val spec = if (visible) {
-        tween<Float>(
+    val spec: AnimationSpec<Float> = if (visible) {
+        tween(
             durationMillis = SETTINGS_ENTER_DURATION_MS,
             delayMillis = index * SETTINGS_ENTER_STAGGER_MS
         )
     } else {
-        tween<Float>(
+        tween(
             durationMillis = SETTINGS_EXIT_DURATION_MS,
             delayMillis = (SETTINGS_ITEM_COUNT - 1 - index) * SETTINGS_EXIT_STAGGER_MS
         )
@@ -1528,13 +1528,13 @@ private fun Modifier.settingsSlideIn(index: Int, visible: Boolean, fromLeft: Boo
  */
 @Composable
 private fun Modifier.addEditPageItem(index: Int, active: Boolean, slideSign: Float): Modifier {
-    val spec = if (active) {
-        tween<Float>(
+    val spec: AnimationSpec<Float> = if (active) {
+        tween(
             durationMillis = ADD_EDIT_ITEM_ENTER_MS,
             delayMillis = index * ADD_EDIT_ITEM_STAGGER_MS
         )
     } else {
-        tween<Float>(
+        tween(
             durationMillis = ADD_EDIT_ITEM_EXIT_MS,
             delayMillis = (ADD_EDIT_ITEM_COUNT - 1 - index) * ADD_EDIT_ITEM_EXIT_STAGGER_MS
         )
@@ -1593,7 +1593,6 @@ private fun SettingsNavIcon(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     navController: NavController,
@@ -1766,7 +1765,7 @@ fun SettingsScreen(
 
                             val backupForZip = backup.copy(
                                 appBackgroundImage = zipAppBgName ?: backup.appBackgroundImage,
-                                events = backup.events.map { it.zipEntryUris(zipImages, zipFonts) },
+                                events = backup.events.map { event -> event.zipEntryUris(zipImages, zipFonts) },
                                 // The saved-fonts list stores absolute paths as well, so they are
                                 // swapped for entry names exactly like the cards' fonts are.
                                 savedFonts = backup.savedFonts?.map { font ->
@@ -1853,8 +1852,8 @@ fun SettingsScreen(
                                     // A card's font is an entry too; when the backup carries no bytes
                                     // for it (an older backup) the path is kept as it is.
                                     val fontPath = restoredEvent.customFontPath
-                                        ?.takeIf { it.startsWith("fonts/") }
-                                        ?.let { restoreFont(it) }
+                                        ?.takeIf { fontEntry -> fontEntry.startsWith("fonts/") }
+                                        ?.let { fontEntry -> restoreFont(fontEntry) }
                                         ?: restoredEvent.customFontPath
                                     restoredEvent.copy(customFontPath = fontPath)
                                 }
@@ -2183,9 +2182,8 @@ fun SettingsScreen(
                 ) {
                     var hasNotifPermission by remember {
                         mutableStateOf(
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                            } else true
+                            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
                         )
                     }
 
@@ -2193,9 +2191,8 @@ fun SettingsScreen(
                     DisposableEffect(lifecycleOwner) {
                         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                                hasNotifPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                                } else true
+                                hasNotifPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
                             }
                         }
                         lifecycleOwner.lifecycle.addObserver(observer)
@@ -2485,7 +2482,6 @@ private suspend fun extractColorFromUri(context: Context, uri: Uri): String? {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Suppress("UNUSED_PARAMETER")
 fun ChangelogScreen(dataManager: DataManager) {
@@ -2575,7 +2571,7 @@ fun ChangelogScreen(dataManager: DataManager) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddEditScreen(navController: NavController, dataManager: DataManager, eventId: String?, backStackEntry: androidx.navigation.NavBackStackEntry, isDark: Boolean) {
+fun AddEditScreen(navController: NavController, dataManager: DataManager, eventId: String?, backStackEntry: NavBackStackEntry, isDark: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val events by dataManager.events.collectAsState(initial = emptyList())
@@ -2827,9 +2823,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     // Notification permission check
     var hasNotificationPermission by remember { 
         mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-            } else true
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         )
     }
 
@@ -2840,9 +2835,8 @@ fun AddEditScreen(navController: NavController, dataManager: DataManager, eventI
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                } else true
+                hasNotificationPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

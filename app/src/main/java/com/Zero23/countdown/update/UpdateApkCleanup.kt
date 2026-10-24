@@ -4,7 +4,7 @@ import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 
 /** Name the release APK is downloaded under; DownloadManager appends "-1", "-2", ... on clashes. */
 const val UPDATE_APK_FILE_NAME = "CountDayDown_Update.apk"
@@ -71,7 +71,7 @@ fun cleanupUpdateApkDownloads(context: Context) {
             while (cursor.moveToNext()) {
                 val localUri = cursor.getString(uriIndex) ?: continue
                 val fileName = try {
-                    Uri.parse(localUri).lastPathSegment
+                    localUri.toUri().lastPathSegment
                 } catch (_: Exception) {
                     null
                 }
