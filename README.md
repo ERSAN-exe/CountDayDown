@@ -129,7 +129,7 @@
 
 [![Pull Request](https://img.shields.io/badge/Pull%20Request-提交代码-green?style=for-the-badge&logo=github)](https://github.com/ERSAN-exe/CountDayDown/pulls)
 
-[![Feature Request](https://img.shields.io/badge/Feature%20Request-新功能建议-blue?style=for-the-badge&logo=lightbulb)](https://github.com/ERSAN-exe/CountDayDown/issues/new)
+[![Feature Request](https://img.shields.io/badge/Feature%20Request-新功能建议-blue?style=for-the-badge&logo=lightbulb)](https://github.com/ERSAN-exe/CountDayDown/discussions/new?category=ideas)
 
 <div align="center">
 
