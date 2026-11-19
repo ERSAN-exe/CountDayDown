@@ -14,7 +14,7 @@
 
 <h3>
 
-一个轻量化的 Android 倒数日应用
+简洁轻量的 Android 倒数日
 
 </h3>
 
@@ -36,7 +36,7 @@
 
 软件会以卡片形式展示你创建的日期 让重要事件更加直观
 
-大号卡片<img src="screenshots/homepageSample1.png" width="200" alt="大号倒数日卡片"> 小号卡片<img src="screenshots/homepageSample2.png" width="200" alt="小号倒数日卡片">
+<img src="screenshots/homepageSample1.png" width="200" alt="大号倒数日卡片"> <img src="screenshots/homepageSample2.png" width="200" alt="小号倒数日卡片">
 
 ## 将卡片导出为图片
 
@@ -52,17 +52,17 @@
 
 ## 美化
 
-- 🌈 自定义颜色
-- 🖼️ 设置图片作为卡片背景
-- 🔤 导入自定义字体
+- 自定义颜色
+- 设置图片作为卡片背景
+- 导入自定义字体
 
 <img src="screenshots/customize.png" width="200" alt="自定义页面"> 
 
 ## 日期设置
 
-- ↗️ 排除一周中的指定日期
-- 🔁 循环倒数
-- 🔔 通知提醒
+- 排除一周中的指定日期
+- 循环
+- 通知提醒
 
 <img src="screenshots/basicedit.png" width="200" alt="基础编辑页面"> <img src="screenshots/advance.png" width="200" alt="高级设置页面">
 
@@ -71,8 +71,8 @@
 ## 应用美化
 
 - 浅色模式/深色模式
-- 🌈 自定义软件主题色
-- 🏞️ 自定义应用背景
+- 自定义软件主题色
+- 自定义应用背景
 
 ## 管理通知
 
@@ -100,8 +100,6 @@
 
 - 2×2
 - 4×2
-
-显示效果与软件内倒数日卡片保持一致
 
 <img src="screenshots/widgetperview.png" width="200" alt="桌面小组件">
 
@@ -133,8 +131,8 @@
 
 <div align="center">
 
-**作者：铃一贰叁**
+**铃一贰叁**
 
-如果这个项目对你有帮助 欢迎 Star ⭐
+如果这个项目对你有帮助 欢迎 ★ Star 
 
 </div>
