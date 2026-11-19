@@ -14,7 +14,7 @@ Supported Language:🇨🇳 Chinese 🇺🇸 English 🇯🇵 Japanese 🇰🇷 
 
 <h3>
 
-A lightweight Android countdown day application
+A lightweight Android countdown application
 
 </h3>
 
@@ -36,7 +36,7 @@ A lightweight Android countdown day application
 
 The app displays the dates you create in the form of cards, making important events more intuitive
 
-Large<img src="screenshots/en/homepageSample1.png" width="200" alt="Large countdown day card"> Small<img src="screenshots/en/homepageSample2.png" width="200" alt="Small countdown day card">
+<img src="screenshots/en/homepageSample1.png" width="200" alt="Large countdown day card"> <img src="screenshots/en/homepageSample2.png" width="200" alt="Small countdown day card">
 
 ## Export Cards as Images
 
@@ -52,17 +52,17 @@ Sample:
 
 ## Customization
 
--   🌈 Custom colors
--   🖼️ Set images as card backgrounds
--   🔤 Import custom fonts
+-   Custom colors
+-   Set images as card backgrounds
+-   Import custom fonts
 
 <img src="screenshots/en/customize.png" width="200" alt="Customization page">
 
 ## Date Settings
 
--   ↗️ Exclude specified days of the week
--   🔁 Repeating countdowns
--   🔔 Notification reminders
+-   Exclude specified days of the week
+-   Repeating countdowns
+-   Notification reminders
 
 <img src="screenshots/en/basicedit.png" width="200" alt="Basic edit page">   <img src="screenshots/en/advance.png" width="200" alt="Advanced settings page">
 
@@ -71,8 +71,8 @@ Sample:
 ## App Customization
 
 -   Light mode / Dark mode
--   🌈 Custom app theme colors
--   🏞️ Custom app background
+-   Custom app theme colors
+-   Custom app background
 
 ## Manage Notifications
 
@@ -100,8 +100,6 @@ Supports two widget sizes:
 
 -   2×2
 -   4×2
-
-The display effect is consistent with the countdown day cards inside the app
 
 <img src="screenshots/en/widgetperview.png" width="200" alt="Home screen widget">
 
@@ -133,8 +131,8 @@ Author Email: ZErO23_FeedBack@outlook.com
 
 <div align="center">
 
-**Author: 铃一贰叁**
+**铃一贰叁**
 
-If this project helps you, feel free to Star ⭐
+If this project helps you, feel free to ★ Star
 
 </div>
