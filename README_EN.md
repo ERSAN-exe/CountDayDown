@@ -46,7 +46,7 @@ Long press a countdown day card to open the menu and select **Export as Image** 
 
 Sample:
 
-<img src="screenshots/en/pic1.png" width="220" alt="Export image example 1"> <img src="screenshots/en/pic2.png" width="120" alt="Export image example 2"> <img src="screenshots/en/pic3.png" width="220" alt="Export image example 3">
+<img src="screenshots/en/pic1.png" width="220" alt="Export image example 1"> <img src="screenshots/en/pic2.png" width="140" alt="Export image example 2"> <img src="screenshots/en/pic3.png" width="220" alt="Export image example 3">
 
 # Create Countdown Cards
 

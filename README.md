@@ -46,7 +46,7 @@
 
 导出效果：
 
-<img src="screenshots/pic1.png" width="220" alt="导出图片示例1"> <img src="screenshots/pic2.png" width="120" alt="导出图片示例2"> <img src="screenshots/pic3.png" width="220" alt="导出图片示例3">
+<img src="screenshots/pic1.png" width="220" alt="导出图片示例1"> <img src="screenshots/pic2.png" width="140" alt="导出图片示例2"> <img src="screenshots/pic3.png" width="220" alt="导出图片示例3">
 
 # 创建倒数日卡片
 
@@ -94,7 +94,7 @@
 
 # 桌面小组件
 
-> 目前桌面小组件仅适配 Android 原生小组件库
+> 桌面小组件仅适配 Android 原生小组件库
 
 支持两种大小的小组件：
 
