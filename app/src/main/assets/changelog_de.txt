@@ -1,11 +1,22 @@
 =============================
-Änderungsprotokoll v1.7
-17. Oktober 2026
+Änderungsprotokoll v1.8
+20. November 2026
 =============================
-Das Update-Paket wird jetzt nach der Installation des Updates gelöscht.
+Kleine Karten zeigen nun nur noch die größte Zeiteinheit aufgerundet an.
+Das Änderungsprotokoll wird jetzt nach Abschluss eines Updates angezeigt.
+Das Tippen auf das Änderungsprotokoll zeigt nun standardmäßig nur den Inhalt der aktuellen Version an.
+Das ursprüngliche App-Icon wurde durch eine vereinfachte Version ersetzt.
+Der Text vor der Zielzeit wurde entfernt.
+Doppelte Titel im Änderungsprotokoll wurden entfernt.
 
 -----------------------------
 Frühere Änderungsprotokolle
+-----------------------------
+Änderungsprotokoll v1.7
+17. Oktober 2026
+
+Das Update-Paket wird jetzt nach der Installation des Updates gelöscht.
+
 -----------------------------
 Änderungsprotokoll v1.6.4
 3. Oktober 2026
@@ -13,8 +24,6 @@ Frühere Änderungsprotokolle
 Übergangsanimationen für die Bearbeitungsseite hinzugefügt.
 Deutsch, Französisch und Russisch hinzugefügt.
 
------------------------------
-Frühere Änderungsprotokolle
 -----------------------------
 Änderungsprotokoll v1.6.3
 26. September 2026
@@ -40,8 +49,6 @@ Ein Problem mit der Überlagerung am unteren Rand des Farbwählers behoben.
 Ein Problem behoben, bei dem im Suchfeld eine Lücke in der Animation auftrat.
 Ein Problem behoben, bei dem eine Countdown-Karte mit einem einzelnen Bild nach erneutem Anwenden einer exportierten Konfiguration als schwarze Karte angezeigt wurde.
 
------------------------------
-Frühere Änderungsprotokolle
 -----------------------------
 Änderungsprotokoll v1.6
 25. September 2026

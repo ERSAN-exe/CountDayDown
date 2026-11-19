@@ -1,11 +1,22 @@
 =============================
-Journal des modifications v1.7
-17 octobre 2026
+Journal des modifications v1.8
+20 novembre 2026
 =============================
-Le paquet de mise à jour est désormais supprimé une fois l'installation terminée.
+Les petites cartes affichent désormais uniquement la plus grande unité de temps arrondie à l'unité supérieure.
+Le journal des modifications s'affiche désormais après une mise à jour.
+Appuyer sur le journal des modifications affiche par défaut uniquement le contenu de la version actuelle.
+Remplacement de l'icône d'origine de l'application par une version simplifiée.
+Suppression du texte devant l'heure cible.
+Suppression des titres en double dans le journal des modifications.
 
 -----------------------------
 Modifications précédentes
+-----------------------------
+Journal des modifications v1.7
+17 octobre 2026
+
+Le paquet de mise à jour est désormais supprimé une fois l'installation terminée.
+
 -----------------------------
 Journal des modifications v1.6.4
 3 octobre 2026
@@ -13,8 +24,6 @@ Journal des modifications v1.6.4
 Ajout d'animations de transition pour la page d'édition.
 Ajout de l'allemand, du français et du russe.
 
------------------------------
-Modifications précédentes
 -----------------------------
 Journal des modifications v1.6.3
 26 septembre 2026
@@ -40,8 +49,6 @@ Correction d'un problème d'occlusion en bas de l'écran de sélection des coule
 Correction d'un problème où un espace apparaissait dans l'animation de la zone de recherche.
 Correction d'un problème où une carte de compte à rebours avec une seule image s'affichait comme une carte noire après avoir réappliqué une configuration exportée.
 
------------------------------
-Modifications précédentes
 -----------------------------
 Journal des modifications v1.6
 25 septembre 2026

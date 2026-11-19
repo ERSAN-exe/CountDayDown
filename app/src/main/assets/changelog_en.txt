@@ -1,11 +1,22 @@
 =============================
-v1.7 Changelog
-October 17, 2026
+v1.8 Changelog
+November 20, 2026
 =============================
-The update package is now deleted after the update is installed.
+Small cards now only show the largest time unit rounded up.
+The changelog is now displayed after a version update is completed.
+Tapping the changelog now defaults to showing only the current version's content.
+Replaced the original app icon with a simplified version.
+Removed the text in front of the target time.
+Removed duplicate titles in the changelog.
 
 -----------------------------
 Previous Changelogs
+-----------------------------
+v1.7 Changelog
+October 17, 2026
+
+The update package is now deleted after the update is installed.
+
 -----------------------------
 v1.6.4 Changelog
 October 3, 2026
@@ -13,8 +24,6 @@ October 3, 2026
 Added transition animations for the edit page.
 Added German, French, and Russian.
 
------------------------------
-Previous Changelogs
 -----------------------------
 v1.6.3 Changelog
 September 26, 2026
@@ -40,8 +49,6 @@ Fixed an issue with occlusion at the bottom of the color picker screen.
 Fixed an issue where a gap appeared in the search box animation.
 Fixed an issue where a countdown card with a single image was shown as a black card after re-applying an exported configuration.
 
------------------------------
-Previous Changelogs
 -----------------------------
 v1.6 Changelog
 September 25, 2026

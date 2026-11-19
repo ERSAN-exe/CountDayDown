@@ -41,6 +41,7 @@
     <string name="text_color">文字颜色</string>
     <string name="remaining">还剩</string>
     <string name="changelog_full_title">更新日志</string>
+    <string name="changelog_full_log">完整日志</string>
     <string name="current_time" />
     <string name="target">目标: </string>
     <string name="add_new_event">点击+创建倒数日卡片</string>
@@ -55,7 +56,7 @@
     <string name="rgb">RGB</string>
     <string name="custom_color">自定义颜色</string>
     <string name="preset_color">预设颜色</string>
-    <string name="version_text">版本v1.7</string>
+    <string name="version_text">版本v1.8</string>
     <string name="create_card">创建新倒计时卡片</string>
     <string name="edit_card">编辑</string>
     <string name="event_name">事件名称</string>

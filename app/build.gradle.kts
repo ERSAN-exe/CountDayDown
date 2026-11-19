@@ -12,8 +12,8 @@ android {
         applicationId = "com.Zero23.countdown"
         minSdk = 31
         targetSdk = 37
-        versionCode = 18
-        versionName = "1.7"
+        versionCode = 19
+        versionName = "1.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         

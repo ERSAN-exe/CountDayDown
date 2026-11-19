@@ -5,6 +5,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import coil3.compose.AsyncImage
 
 import android.content.Context
+import android.content.res.Configuration
 import android.Manifest
 import android.content.Intent
 import android.graphics.Bitmap
@@ -346,8 +347,37 @@ class MainActivity : ComponentActivity() {
                 try { Color(it.toColorInt()) } catch(_: Exception) { null }
             }
 
+            // Auto Changelog Dialog State (shown on first launch after a version update)
+            val lastSeenVersionCode by dataManager.lastSeenVersionCode.collectAsState(initial = -1)
+            var showAutoChangelogDialog by remember { mutableStateOf(false) }
+
+            val currentVersionCode = remember {
+                try {
+                    // minSdk is 31, so the long value added in API 28 is always available.
+                    context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode.toInt()
+                } catch (_: Exception) {
+                    0
+                }
+            }
+
+            LaunchedEffect(lastSeenVersionCode) {
+                if (lastSeenVersionCode != -1 && currentVersionCode > 0 && lastSeenVersionCode < currentVersionCode) {
+                    showAutoChangelogDialog = true
+                    dataManager.setLastSeenVersionCode(currentVersionCode)
+                }
+            }
+
             CountDownTheme(darkTheme = isDarkTheme, customColor = customThemeColor) {
                 val navController = rememberNavController()
+
+                if (showAutoChangelogDialog) {
+                    CurrentChangelogDialog(
+                        navController = navController,
+                        showFullLogButton = false,
+                        onDismiss = { showAutoChangelogDialog = false }
+                    )
+                }
+
                 val windowInfo = LocalWindowInfo.current
                 val screenRatio = windowInfo.containerSize.height.toFloat() / windowInfo.containerSize.width.toFloat()
 
@@ -1632,6 +1662,16 @@ fun SettingsScreen(
     val themeColorHex by dataManager.themeColor.collectAsState(initial = null)
     val notificationsEnabled by dataManager.notificationsEnabled.collectAsState(initial = true)
 
+    var showChangelogDialog by remember { mutableStateOf(false) }
+
+    if (showChangelogDialog) {
+        CurrentChangelogDialog(
+            navController = navController,
+            showFullLogButton = true,
+            onDismiss = { showChangelogDialog = false }
+        )
+    }
+
     val appBgImage by dataManager.appBackgroundImage.collectAsState(initial = null)
     val appBgThemeColor by dataManager.appBackgroundThemeColor.collectAsState(initial = null)
     val appBgBrightness by dataManager.appBackgroundBrightness.collectAsState(initial = 0.5f)
@@ -2313,10 +2353,10 @@ fun SettingsScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(
-                            painter = painterResource(id = R.drawable.my_logo),
+                            painter = painterResource(id = R.drawable.ic_app_logo),
                             contentDescription = null,
                             modifier = Modifier
-                                .size(72.dp)
+                                .size(88.dp)
                                 .clip(RoundedCornerShape(16.dp))
                         )
                         Spacer(modifier = Modifier.width(16.dp))
@@ -2350,7 +2390,7 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surface)
-                            .clickable { navController.navigate("changelog") }
+                            .clickable { showChangelogDialog = true }
                             .padding(horizontal = 24.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -2482,6 +2522,90 @@ private suspend fun extractColorFromUri(context: Context, uri: Uri): String? {
     }
 }
 
+fun getChangelogText(
+    context: Context,
+    configuration: Configuration,
+    noChangelogMsg: String,
+    aiDisclaimer: String,
+    full: Boolean = true
+): String {
+    val locale = configuration.locales[0]
+    val language = locale.language.lowercase()
+    val country = locale.country.uppercase()
+    val script = locale.script.lowercase()
+    // Simplified Chinese is the source of truth; every other locale is an AI translation.
+    val isSimplifiedChinese = language == "zh" && script != "hant" &&
+        country != "TW" && country != "HK" && country != "MO"
+    val assetName = when (language) {
+        "zh" -> if (isSimplifiedChinese) "changelog.txt" else "changelog_zh_tw.txt"
+        "ja" -> "changelog_ja.txt"
+        "ko" -> "changelog_ko.txt"
+        "ru" -> "changelog_ru.txt"
+        "fr" -> "changelog_fr.txt"
+        "de" -> "changelog_de.txt"
+        else -> "changelog_en.txt"
+    }
+    return try {
+        val content = context.assets.open(assetName).bufferedReader().use { it.readText() }
+        val targetContent = if (full) content else content.substringBefore("-----------------------------").trim()
+        if (isSimplifiedChinese) targetContent else aiDisclaimer + targetContent
+    } catch (_: Exception) {
+        noChangelogMsg
+    }
+}
+
+@Composable
+fun CurrentChangelogDialog(
+    navController: NavController,
+    showFullLogButton: Boolean = true,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val noChangelogMsg = stringResource(R.string.no_changelog)
+    val aiDisclaimer = stringResource(R.string.changelog_ai_disclaimer)
+    val configuration = LocalConfiguration.current
+    val currentChangelogText = remember(configuration, noChangelogMsg, aiDisclaimer) {
+        getChangelogText(context, configuration, noChangelogMsg, aiDisclaimer, full = false)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.changelog_full_title)) },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(text = currentChangelogText, style = MaterialTheme.typography.bodyMedium)
+            }
+        },
+        confirmButton = {
+            if (showFullLogButton) {
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                        navController.navigate("changelog")
+                    }
+                ) {
+                    Text(stringResource(R.string.changelog_full_log))
+                }
+            } else {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.confirm))
+                }
+            }
+        },
+        dismissButton = {
+            if (showFullLogButton) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.confirm))
+                }
+            }
+        }
+    )
+}
+
 @Composable
 @Suppress("UNUSED_PARAMETER")
 fun ChangelogScreen(dataManager: DataManager) {
@@ -2490,28 +2614,7 @@ fun ChangelogScreen(dataManager: DataManager) {
     val aiDisclaimer = stringResource(R.string.changelog_ai_disclaimer)
     val configuration = LocalConfiguration.current
     val changelogText = remember(configuration, noChangelogMsg, aiDisclaimer) {
-        val locale = configuration.locales[0]
-        val language = locale.language.lowercase()
-        val country = locale.country.uppercase()
-        val script = locale.script.lowercase()
-        // Simplified Chinese is the source of truth; every other locale is an AI translation.
-        val isSimplifiedChinese = language == "zh" && script != "hant" &&
-            country != "TW" && country != "HK" && country != "MO"
-        val assetName = when (language) {
-            "zh" -> if (isSimplifiedChinese) "changelog.txt" else "changelog_zh_tw.txt"
-            "ja" -> "changelog_ja.txt"
-            "ko" -> "changelog_ko.txt"
-            "ru" -> "changelog_ru.txt"
-            "fr" -> "changelog_fr.txt"
-            "de" -> "changelog_de.txt"
-            else -> "changelog_en.txt"
-        }
-        try {
-            val content = context.assets.open(assetName).bufferedReader().use { it.readText() }
-            if (isSimplifiedChinese) content else aiDisclaimer + content
-        } catch (_: Exception) {
-            noChangelogMsg
-        }
+        getChangelogText(context, configuration, noChangelogMsg, aiDisclaimer, full = true)
     }
 
     Scaffold(
@@ -4148,7 +4251,7 @@ fun CountdownItem(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = event.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = titleColor, fontFamily = customFontFamily)
-                    Text(text = "${stringResource(R.string.target)}${target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))}", style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
+                    Text(text = target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
                 }
             }
             Spacer(modifier = Modifier.height(32.dp))
@@ -4432,10 +4535,6 @@ fun SmallCountdownItem(
     }
 
     val absDuration = duration.abs()
-    val days = absDuration.toDays()
-    val hours = absDuration.toHours() % 24
-    val minutes = absDuration.toMinutes() % 60
-    val seconds = absDuration.seconds % 60
 
     val customColor = event.colorHex?.let { try { Color(it.toColorInt()) } catch(_:Exception) { null } }
     val baseColor = customColor ?: MaterialTheme.colorScheme.primary
@@ -4538,52 +4637,43 @@ fun SmallCountdownItem(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = event.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = titleColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = customFontFamily)
-                    Text(text = stringResource(R.string.target), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), fontFamily = customFontFamily)
                     Text(text = target.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)), style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = customFontFamily)
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
             Box(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.align(Alignment.BottomStart)) {
-                    if (duration.isNegative) {
-                        val (value, unit) = when {
-                            kotlin.math.abs(days) > 0 -> kotlin.math.abs(days).toString() to stringResource(R.string.unit_days)
-                            kotlin.math.abs(hours) > 0 -> kotlin.math.abs(hours).toString() to stringResource(R.string.unit_hours)
-                            else -> kotlin.math.abs(minutes).toString() to stringResource(R.string.unit_minutes)
+                    val totalDays = absDuration.toDays()
+                    val totalHours = absDuration.toHours()
+                    val totalMinutes = absDuration.toMinutes()
+                    val totalSeconds = absDuration.seconds
+
+                    val (displayValue, displayUnitRes) = when {
+                        totalDays > 0 -> {
+                            val hasRemainder = absDuration.minusDays(totalDays).seconds > 0
+                            val daysVal = if (hasRemainder) totalDays + 1 else totalDays
+                            daysVal.toString() to R.string.unit_days
                         }
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(text = value, fontSize = 32.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 32.sp, fontFamily = customFontFamily)
-                            Text(text = unit + stringResource(R.string.ago_suffix), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
+                        totalHours > 0 -> {
+                            val hasRemainder = absDuration.minusHours(totalHours).seconds > 0
+                            val hoursVal = if (hasRemainder) totalHours + 1 else totalHours
+                            hoursVal.toString() to R.string.unit_hours
                         }
-                    } else {
-                        if (days > 0) {
-                            Column {
-                                Row(verticalAlignment = Alignment.Bottom) {
-                                    Text(text = days.toString(), fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
-                                    Text(text = stringResource(R.string.unit_days), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
-                                }
-                                // The hours and the minutes of the remaining time, so the small card
-                                // carries the same countdown as the big one. They get a line of their
-                                // own: the square card is too narrow to print the whole countdown in a
-                                // single row, so the time simply uses a smaller size than the days.
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                ) {
-                                    Text(text = hours.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, lineHeight = 16.sp, fontFamily = customFontFamily)
-                                    Text(text = stringResource(R.string.unit_hours), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 1.dp, end = 6.dp), fontFamily = customFontFamily)
-                                    Text(text = minutes.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, lineHeight = 16.sp, fontFamily = customFontFamily)
-                                    Text(text = stringResource(R.string.unit_minutes), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = numberColor, modifier = Modifier.padding(start = 1.dp), fontFamily = customFontFamily)
-                                }
-                            }
-                        } else {
-                            val timeText = when {
-                                hours > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", hours, minutes)
-                                minutes > 0 -> String.format(LocalConfiguration.current.locales[0], "%02d:%02d", minutes, seconds)
-                                else -> String.format(LocalConfiguration.current.locales[0], "%02d", seconds)
-                            }
-                            Text(text = timeText, fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
+                        totalMinutes > 0 -> {
+                            val hasRemainder = absDuration.minusMinutes(totalMinutes).seconds > 0
+                            val minutesVal = if (hasRemainder) totalMinutes + 1 else totalMinutes
+                            minutesVal.toString() to R.string.unit_minutes
                         }
+                        else -> {
+                            totalSeconds.toString() to R.string.unit_seconds
+                        }
+                    }
+                    val unitStr = stringResource(displayUnitRes)
+                    val suffix = if (duration.isNegative) stringResource(R.string.ago_suffix) else ""
+
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(text = displayValue, fontSize = 36.sp, fontWeight = FontWeight.Black, color = numberColor, lineHeight = 36.sp, fontFamily = customFontFamily)
+                        Text(text = unitStr + suffix, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = numberColor, modifier = Modifier.padding(bottom = 4.dp, start = 2.dp), fontFamily = customFontFamily)
                     }
                 }
                 if (!isExporting && (event.reminderMinutesBefore != null || (event.repeatType != null && event.repeatType != "none"))) {

@@ -163,6 +163,7 @@ class DataManager(private val context: Context) {
     private val appBackgroundImageKey = stringPreferencesKey("app_bg_image")
     private val appBackgroundBrightnessKey = androidx.datastore.preferences.core.floatPreferencesKey("app_bg_brightness")
     private val appBackgroundThemeColorKey = stringPreferencesKey("app_bg_theme_color")
+    private val lastSeenVersionCodeKey = intPreferencesKey("last_seen_version_code")
 
     val events: Flow<List<CountdownEvent>> = context.dataStore.data
         .map { it[eventsKey] ?: "[]" }
@@ -257,6 +258,16 @@ class DataManager(private val context: Context) {
 
     val appBackgroundThemeColor: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[appBackgroundThemeColorKey]
+    }
+
+    val lastSeenVersionCode: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[lastSeenVersionCodeKey] ?: 0
+    }
+
+    suspend fun setLastSeenVersionCode(code: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[lastSeenVersionCodeKey] = code
+        }
     }
 
     private val sortAscendingKey = booleanPreferencesKey("sort_ascending")
