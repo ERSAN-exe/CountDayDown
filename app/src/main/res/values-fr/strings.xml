@@ -41,6 +41,7 @@
     <string name="text_color">Couleur du texte</string>
     <string name="remaining">Restant</string>
     <string name="changelog_full_title">Journal des modifications</string>
+    <string name="changelog_dialog_title">Modifications de la v%s</string>
     <string name="changelog_full_log">Journal complet</string>
     <string name="changelog_ai_disclaimer">&gt;&gt; Ce contenu est traduit par IA. La version en chinois simplifié prévaut. &lt;&lt;\n\n</string>
     <string name="current_time" />
@@ -57,7 +58,7 @@
     <string name="rgb">RVB</string>
     <string name="custom_color">Couleur personnalisée</string>
     <string name="preset_color">Couleur prédéfinie</string>
-    <string name="version_text">Version v1.8</string>
+    <string name="version_text">Version v1.8.1</string>
     <string name="create_card">Créer une nouvelle carte</string>
     <string name="edit_card">Modifier</string>
     <string name="event_name">Nom de l\'événement</string>

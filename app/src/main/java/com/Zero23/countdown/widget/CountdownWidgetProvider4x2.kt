@@ -112,12 +112,12 @@ class CountdownWidgetProvider4x2 : AppWidgetProvider() {
             }
 
             val absDuration = duration.abs()
-            val totalDays = absDuration.toDays()
-            val totalHours = absDuration.toHours()
-            val totalMinutes = absDuration.toMinutes()
-            val totalSeconds = absDuration.seconds
+            val days = absDuration.toDays()
+            val hours = absDuration.toHours() % 24
+            val minutes = absDuration.toMinutes() % 60
 
             val isPast = duration.isNegative
+            val ago = if (isPast) context.getString(R.string.ago_suffix) else ""
             
             val actualTextColor = if (event.backgroundImageUri != null) textColor else Color.WHITE
             val secondaryTextColor = if (event.backgroundImageUri != null) textColor else "#99000000".toColorInt()
@@ -126,32 +126,55 @@ class CountdownWidgetProvider4x2 : AppWidgetProvider() {
             setWidgetText(views, R.id.widget_title, R.id.widget_title_img, event.name, 22f, actualTextColor, customTypeface, context)
             setWidgetText(views, R.id.widget_target_label, R.id.widget_target_label_img, target.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")), 12f, labelColor, customTypeface, context)
 
-            val (displayValue, displayUnitStr) = when {
-                totalDays > 0 -> {
-                    val hasRemainder = absDuration.minusDays(totalDays).seconds > 0
-                    val daysVal = if (hasRemainder) totalDays + 1 else totalDays
-                    daysVal.toString() to context.getString(R.string.unit_days)
+            if (isPast) {
+                val totalDays = absDuration.toDays()
+                val totalHours = absDuration.toHours()
+                val totalMinutes = absDuration.toMinutes()
+                val totalSeconds = absDuration.seconds
+
+                val (displayValue, displayUnitStr) = when {
+                    totalDays > 0 -> {
+                        val hasRemainder = absDuration.minusDays(totalDays).seconds > 0
+                        val daysVal = if (hasRemainder) totalDays + 1 else totalDays
+                        daysVal.toString() to context.getString(R.string.unit_days)
+                    }
+                    totalHours > 0 -> {
+                        val hasRemainder = absDuration.minusHours(totalHours).seconds > 0
+                        val hoursVal = if (hasRemainder) totalHours + 1 else totalHours
+                        hoursVal.toString() to context.getString(R.string.unit_hours)
+                    }
+                    totalMinutes > 0 -> {
+                        val hasRemainder = absDuration.minusMinutes(totalMinutes).seconds > 0
+                        val minutesVal = if (hasRemainder) totalMinutes + 1 else totalMinutes
+                        minutesVal.toString() to context.getString(R.string.unit_minutes)
+                    }
+                    else -> {
+                        totalSeconds.toString() to context.getString(R.string.unit_seconds)
+                    }
                 }
-                totalHours > 0 -> {
-                    val hasRemainder = absDuration.minusHours(totalHours).seconds > 0
-                    val hoursVal = if (hasRemainder) totalHours + 1 else totalHours
-                    hoursVal.toString() to context.getString(R.string.unit_hours)
-                }
-                totalMinutes > 0 -> {
-                    val hasRemainder = absDuration.minusMinutes(totalMinutes).seconds > 0
-                    val minutesVal = if (hasRemainder) totalMinutes + 1 else totalMinutes
-                    minutesVal.toString() to context.getString(R.string.unit_minutes)
-                }
-                else -> {
-                    totalSeconds.toString() to context.getString(R.string.unit_seconds)
+
+                setWidgetText(views, R.id.widget_days, R.id.widget_days_img, displayValue, 42f, secondaryTextColor, customTypeface, context)
+                setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, displayUnitStr + ago, 22f, secondaryTextColor, customTypeface, context)
+                views.setViewVisibility(R.id.widget_time, View.GONE)
+                views.setViewVisibility(R.id.widget_time_img, View.GONE)
+            } else {
+                views.setViewVisibility(R.id.widget_time, View.VISIBLE)
+                views.setViewVisibility(R.id.widget_time_img, View.VISIBLE)
+
+                if (days > 0) {
+                    setWidgetText(views, R.id.widget_days, R.id.widget_days_img, days.toString(), 42f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, context.getString(R.string.unit_days), 22f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_time, R.id.widget_time_img, "$hours${context.getString(R.string.unit_hours)} $minutes${context.getString(R.string.unit_minutes)}", 16f, secondaryTextColor, customTypeface, context)
+                } else if (hours > 0) {
+                    setWidgetText(views, R.id.widget_days, R.id.widget_days_img, hours.toString(), 42f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, context.getString(R.string.unit_hours), 22f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_time, R.id.widget_time_img, "$minutes${context.getString(R.string.unit_minutes)}", 16f, secondaryTextColor, customTypeface, context)
+                } else {
+                    setWidgetText(views, R.id.widget_days, R.id.widget_days_img, minutes.toString(), 42f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, context.getString(R.string.unit_minutes), 22f, secondaryTextColor, customTypeface, context)
+                    setWidgetText(views, R.id.widget_time, R.id.widget_time_img, "", 16f, secondaryTextColor, customTypeface, context)
                 }
             }
-            val ago = if (isPast) context.getString(R.string.ago_suffix) else ""
-
-            setWidgetText(views, R.id.widget_days, R.id.widget_days_img, displayValue, 42f, secondaryTextColor, customTypeface, context)
-            setWidgetText(views, R.id.widget_days_unit, R.id.widget_days_unit_img, displayUnitStr + ago, 22f, secondaryTextColor, customTypeface, context)
-            views.setViewVisibility(R.id.widget_time, View.GONE)
-            views.setViewVisibility(R.id.widget_time_img, View.GONE)
         } else {
             views.setViewVisibility(R.id.widget_background_image, View.GONE)
             views.setViewVisibility(R.id.widget_background_overlay, View.GONE)

@@ -361,7 +361,11 @@ class MainActivity : ComponentActivity() {
             }
 
             LaunchedEffect(lastSeenVersionCode) {
-                if (lastSeenVersionCode != -1 && currentVersionCode > 0 && lastSeenVersionCode < currentVersionCode) {
+                if (lastSeenVersionCode == null) {
+                    // Fresh install: record current version code without showing dialog
+                    dataManager.setLastSeenVersionCode(currentVersionCode)
+                } else if (lastSeenVersionCode != -1 && currentVersionCode > 0 && lastSeenVersionCode!! < currentVersionCode) {
+                    // Updated version: show changelog dialog and record new version code
                     showAutoChangelogDialog = true
                     dataManager.setLastSeenVersionCode(currentVersionCode)
                 }
@@ -2007,6 +2011,7 @@ fun SettingsScreen(
                 Text(
                     text = stringResource(R.string.appearance),
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
                         .settingsSlideIn(0, rowsVisible, rowsEnterFromLeft)
                         .padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
@@ -2205,6 +2210,7 @@ fun SettingsScreen(
                 Text(
                     text = stringResource(R.string.notifications),
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
                         .settingsSlideIn(4, rowsVisible, rowsEnterFromLeft)
                         .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
@@ -2283,6 +2289,7 @@ fun SettingsScreen(
                 Text(
                     text = stringResource(R.string.backup_restore),
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
                         .settingsSlideIn(6, rowsVisible, rowsEnterFromLeft)
                         .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
@@ -2339,6 +2346,7 @@ fun SettingsScreen(
                 Text(
                     text = stringResource(R.string.about),
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
                         .settingsSlideIn(8, rowsVisible, rowsEnterFromLeft)
                         .padding(top = 24.dp, bottom = 8.dp, start = 8.dp)
@@ -2554,6 +2562,65 @@ fun getChangelogText(
     }
 }
 
+data class CurrentChangelogData(
+    val dateText: String,
+    val bodyText: String
+)
+
+fun getParsedCurrentChangelog(
+    context: Context,
+    configuration: Configuration,
+    noChangelogMsg: String,
+    aiDisclaimer: String
+): CurrentChangelogData {
+    val locale = configuration.locales[0]
+    val language = locale.language.lowercase()
+    val country = locale.country.uppercase()
+    val script = locale.script.lowercase()
+    val isSimplifiedChinese = language == "zh" && script != "hant" &&
+        country != "TW" && country != "HK" && country != "MO"
+    val assetName = when (language) {
+        "zh" -> if (isSimplifiedChinese) "changelog.txt" else "changelog_zh_tw.txt"
+        "ja" -> "changelog_ja.txt"
+        "ko" -> "changelog_ko.txt"
+        "ru" -> "changelog_ru.txt"
+        "fr" -> "changelog_fr.txt"
+        "de" -> "changelog_de.txt"
+        else -> "changelog_en.txt"
+    }
+    return try {
+        val rawContent = context.assets.open(assetName).bufferedReader().use { it.readText() }
+        val currentBlock = rawContent.substringBefore("-----------------------------").trim()
+        val lines = currentBlock.lines()
+        
+        var equalsCount = 0
+        val headerNonEqualLines = mutableListOf<String>()
+        val bodyLines = mutableListOf<String>()
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("===")) {
+                equalsCount++
+                continue
+            }
+            if (equalsCount < 2) {
+                if (trimmed.isNotEmpty()) {
+                    headerNonEqualLines.add(trimmed)
+                }
+            } else {
+                bodyLines.add(line)
+            }
+        }
+        
+        val date = if (headerNonEqualLines.size >= 2) headerNonEqualLines[1] else ""
+        val rawBody = bodyLines.joinToString("\n").trim()
+        val finalBody = if (isSimplifiedChinese) rawBody else aiDisclaimer + rawBody
+        CurrentChangelogData(dateText = date, bodyText = finalBody)
+    } catch (_: Exception) {
+        CurrentChangelogData(dateText = "", bodyText = noChangelogMsg)
+    }
+}
+
 @Composable
 fun CurrentChangelogDialog(
     navController: NavController,
@@ -2564,20 +2631,46 @@ fun CurrentChangelogDialog(
     val noChangelogMsg = stringResource(R.string.no_changelog)
     val aiDisclaimer = stringResource(R.string.changelog_ai_disclaimer)
     val configuration = LocalConfiguration.current
-    val currentChangelogText = remember(configuration, noChangelogMsg, aiDisclaimer) {
-        getChangelogText(context, configuration, noChangelogMsg, aiDisclaimer, full = false)
+    
+    val versionName = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    val parsedChangelog = remember(configuration, noChangelogMsg, aiDisclaimer) {
+        getParsedCurrentChangelog(context, configuration, noChangelogMsg, aiDisclaimer)
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.changelog_full_title)) },
+        title = {
+            Column {
+                Text(
+                    text = stringResource(R.string.changelog_dialog_title, versionName),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (parsedChangelog.dateText.isNotEmpty()) {
+                    Text(
+                        text = parsedChangelog.dateText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        },
         text = {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                Text(text = currentChangelogText, style = MaterialTheme.typography.bodyMedium)
+                Text(text = parsedChangelog.bodyText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             }
         },
         confirmButton = {
@@ -2666,7 +2759,7 @@ fun ChangelogScreen(dataManager: DataManager) {
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
-                Text(text = changelogText, style = MaterialTheme.typography.bodyMedium)
+                Text(text = changelogText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
             }
         }
     }
@@ -4221,7 +4314,7 @@ fun CountdownItem(
     // the small badges. The front card draws them, and so does the stack layer that takes its
     // place while a swipe is running, which is what lets the two copies cross-fade.
     val cardLabels: @Composable BoxScope.(Float) -> Unit = { labelsAlpha ->
-        if (count > 1) {
+        if (!isExporting && count > 1) {
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -4607,7 +4700,7 @@ fun SmallCountdownItem(
     // the small badges. The front card draws them, and so does the stack layer that takes its
     // place while a swipe is running, which is what lets the two copies cross-fade.
     val cardLabels: @Composable BoxScope.(Float) -> Unit = { labelsAlpha ->
-        if (count > 1) {
+        if (!isExporting && count > 1) {
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)

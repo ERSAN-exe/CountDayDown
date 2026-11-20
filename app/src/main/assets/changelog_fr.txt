@@ -1,16 +1,25 @@
 =============================
-Journal des modifications v1.8
+Journal des modifications v1.8.1
 20 novembre 2026
 =============================
+Le journal des modifications ne s'affichera plus lors de la première installation de l'application.
+Les grands widgets de bureau affichent à nouveau l'heure détaillée.
+Modification du format d'affichage du contenu de la boîte de dialogue du journal des modifications.
+Correction de la couleur du texte pour garantir la lisibilité en mode sombre.
+L'indicateur du nombre d'images en haut à droite sur les cartes empilées est désormais correctement masqué lors de l'exportation sous forme d'image.
+
+-----------------------------
+Modifications précédentes
+-----------------------------
+Journal des modifications v1.8
+19 novembre 2026
+
 Les petites cartes affichent désormais uniquement la plus grande unité de temps arrondie à l'unité supérieure.
 Le journal des modifications s'affiche désormais après une mise à jour.
 Appuyer sur le journal des modifications affiche par défaut uniquement le contenu de la version actuelle.
 Remplacement de l'icône d'origine de l'application par une version simplifiée.
-Suppression du texte devant l'heure cible.
 Suppression des titres en double dans le journal des modifications.
 
------------------------------
-Modifications précédentes
 -----------------------------
 Journal des modifications v1.7
 17 octobre 2026

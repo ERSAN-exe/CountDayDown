@@ -1,16 +1,25 @@
 =============================
-v1.8 Changelog
+v1.8.1 Changelog
 November 20, 2026
 =============================
+The changelog dialog will no longer pop up on initial app installation.
+Large desktop widgets now display detailed time again.
+Changed the display format of the changelog dialog content.
+Fixed text color to ensure readability in dark mode.
+The top-right image count indicator on multi-image stacked cards is now correctly hidden when exporting as an image.
+
+-----------------------------
+Previous Changelogs
+-----------------------------
+v1.8 Changelog
+November 19, 2026
+
 Small cards now only show the largest time unit rounded up.
 The changelog is now displayed after a version update is completed.
 Tapping the changelog now defaults to showing only the current version's content.
 Replaced the original app icon with a simplified version.
-Removed the text in front of the target time.
 Removed duplicate titles in the changelog.
 
------------------------------
-Previous Changelogs
 -----------------------------
 v1.7 Changelog
 October 17, 2026

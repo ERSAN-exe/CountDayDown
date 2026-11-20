@@ -260,8 +260,8 @@ class DataManager(private val context: Context) {
         preferences[appBackgroundThemeColorKey]
     }
 
-    val lastSeenVersionCode: Flow<Int> = context.dataStore.data.map { preferences ->
-        preferences[lastSeenVersionCodeKey] ?: 0
+    val lastSeenVersionCode: Flow<Int?> = context.dataStore.data.map { preferences ->
+        preferences[lastSeenVersionCodeKey]
     }
 
     suspend fun setLastSeenVersionCode(code: Int) {

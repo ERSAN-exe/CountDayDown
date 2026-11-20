@@ -76,10 +76,20 @@ fun CountDownTheme(
 
         darkTheme -> darkColorScheme(
             primary = Purple80,
+            onPrimary = Color.White,
             secondary = PurpleGrey80,
+            onSecondary = Color.White,
             tertiary = Pink80,
+            onTertiary = Color.White,
             background = Color(0xFF121212),
-            surface = Color(0xFF1E1E1E)
+            onBackground = Color.White,
+            surface = Color(0xFF1E1E1E),
+            onSurface = Color.White,
+            onSurfaceVariant = Color.White.copy(alpha = 0.7f),
+            primaryContainer = Color(0xFF2D2D2D),
+            onPrimaryContainer = Color.White,
+            secondaryContainer = Color(0xFF252525),
+            onSecondaryContainer = Color.White
         )
         else -> LightColorScheme
     }

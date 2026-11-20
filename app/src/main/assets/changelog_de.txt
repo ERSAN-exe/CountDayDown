@@ -1,16 +1,25 @@
 =============================
-Änderungsprotokoll v1.8
+Änderungsprotokoll v1.8.1
 20. November 2026
 =============================
+Das Änderungsprotokoll wird bei der Erstinstallation der App nicht mehr angezeigt.
+Große Desktop-Widgets zeigen nun wieder detaillierte Zeitangaben an.
+Das Anzeigeformat des Inhalts im Änderungsprotokoll-Dialog wurde geändert.
+Die Textfarbe wurde angepasst, um die Lesbarkeit im dunklen Modus zu gewährleisten.
+Die Bildanzahlanzeige oben rechts auf Stapelkarten wird beim Exportieren als Bild nun ordnungsgemäß ausgeblendet.
+
+-----------------------------
+Frühere Änderungsprotokolle
+-----------------------------
+Änderungsprotokoll v1.8
+19. November 2026
+
 Kleine Karten zeigen nun nur noch die größte Zeiteinheit aufgerundet an.
 Das Änderungsprotokoll wird jetzt nach Abschluss eines Updates angezeigt.
 Das Tippen auf das Änderungsprotokoll zeigt nun standardmäßig nur den Inhalt der aktuellen Version an.
 Das ursprüngliche App-Icon wurde durch eine vereinfachte Version ersetzt.
-Der Text vor der Zielzeit wurde entfernt.
 Doppelte Titel im Änderungsprotokoll wurden entfernt.
 
------------------------------
-Frühere Änderungsprotokolle
 -----------------------------
 Änderungsprotokoll v1.7
 17. Oktober 2026

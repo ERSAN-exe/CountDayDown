@@ -41,6 +41,7 @@
     <string name="text_color">文字顏色</string>
     <string name="remaining">還剩</string>
     <string name="changelog_full_title">更新日誌</string>
+    <string name="changelog_dialog_title">%s版本的變更</string>
     <string name="changelog_full_log">完整日誌</string>
     <string name="changelog_ai_disclaimer">&gt;&gt; 本頁面的內容由 AI 翻譯，內容請以簡體中文為準 &lt;&lt;\n\n</string>
     <string name="current_time" />
@@ -57,7 +58,7 @@
     <string name="rgb">RGB</string>
     <string name="custom_color">自定義顏色</string>
     <string name="preset_color">預設顏色</string>
-    <string name="version_text">版本 v1.8</string>
+    <string name="version_text">版本 v1.8.1</string>
     <string name="saved_fonts">已添加的字體</string>
     <string name="create_card">創建新倒計時卡片</string>
     <string name="edit_card">編輯</string>
