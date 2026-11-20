@@ -113,9 +113,9 @@ Supports two widget sizes:
 
 [![Download](https://img.shields.io/badge/Download-APK-green?style=for-the-badge&logo=android)](https://github.com/ERSAN-exe/CountDayDown/releases/latest/download/app-release.apk)
 
-### Changelog
+### ChangeLogs (multiple languages)
 
-[![Changelog](https://img.shields.io/badge/Changelog-English-yellow?style=for-the-badge&logo=readme&logoColor=white)](app/src/main/assets/changelog_en.txt)
+[![ChangeLogs](https://img.shields.io/badge/ChangeLog-multipleLANG-yellow?style=for-the-badge&logo=readme&logoColor=white)](https://github.com/ERSAN-exe/CountDayDown/tree/master/app/src/main/assets)
 
 # Contribution
 
